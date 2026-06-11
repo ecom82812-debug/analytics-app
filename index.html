@@ -338,11 +338,12 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
 
 <script>
 // ============================================================
-// CONFIG
+// CONFIG — замінити на свої ключі
 // ============================================================
 const SUPABASE_URL = 'https://lvyssuomgbccjmksetof.supabase.co'
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx2eXNzdW9tZ2JjY2pta3NldG9mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExNTc1MjcsImV4cCI6MjA5NjczMzUyN30.AyhiYKQiSuTgl76PRrMwEjMFjxjh2IGOOUMJ9jE7csQ'
-const USD_RATE = 41
+
+let USD_RATE = 41
 const { createClient } = supabase
 const db = createClient(SUPABASE_URL, SUPABASE_KEY)
 
