@@ -157,7 +157,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
 <div class="page active" id="page-dashboard">
   <div class="page-header">
     <div><div class="page-title">Дашборд</div><div class="page-sub">Загальна аналітика по всіх магазинах</div></div>
-    <input type="month" id="dash-month" class="filters" onchange="loadDashboard()" style="width:160px">
+    <span id="dash-month-wrap"></span>
   </div>
   <div class="kpi-grid kpi-grid-4" id="dash-kpi1"></div>
   <div class="kpi-grid kpi-grid-4" id="dash-kpi2"></div>
@@ -174,7 +174,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
     <div><div class="page-title">По днях</div><div class="page-sub">Щоденні звіти</div></div>
     <div class="filters">
       <select id="daily-store" onchange="loadDaily()"><option value="">Всі магазини</option></select>
-      <input type="month" id="daily-month" onchange="loadDaily()" style="width:160px">
+      <span id="daily-month-wrap"></span>
       <button class="btn btn-primary" onclick="showPage('entry')">+ Внести день</button>
     </div>
   </div>
@@ -204,7 +204,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
 <div class="page" id="page-stores-page">
   <div class="page-header">
     <div><div class="page-title">Порівняння магазинів</div><div class="page-sub">Кожен магазин окремо</div></div>
-    <input type="month" id="stores-month" onchange="loadStores()" style="width:160px">
+    <span id="stores-month-wrap"></span>
   </div>
   <div class="store-cards" id="stores-content"><div class="loading">Завантаження...</div></div>
 </div>
@@ -347,6 +347,24 @@ let USD_RATE = 41
 const { createClient } = supabase
 const db = createClient(SUPABASE_URL, SUPABASE_KEY)
 
+const UA_MONTHS = ['Січень','Лютий','Березень','Квітень','Травень','Червень','Липень','Серпень','Вересень','Жовтень','Листопад','Грудень']
+
+function buildMonthSelect(id, onchange) {
+  const now = new Date()
+  const curYear = now.getFullYear()
+  const curMonth = now.getMonth()
+  let opts = ''
+  for (let y = curYear; y >= curYear - 1; y--) {
+    for (let m = 11; m >= 0; m--) {
+      if (y === curYear && m > curMonth) continue
+      const val = `${y}-${String(m+1).padStart(2,'0')}`
+      const sel = (y === curYear && m === curMonth) ? 'selected' : ''
+      opts += `<option value="${val}" ${sel}>${UA_MONTHS[m]} ${y}</option>`
+    }
+  }
+  return `<select id="${id}" onchange="${onchange}" style="border:1px solid #d1d5db;border-radius:6px;padding:6px 9px;font-size:12.5px;background:#fff;font-family:inherit">${opts}</select>`
+}
+
 // ============================================================
 // STATE
 // ============================================================
@@ -388,6 +406,26 @@ async function init() {
   // Mgr buttons for entry
   renderMgrButtons()
   renderSettingsLists()
+
+  // Build month selects
+  const monthSelects = [
+    ['dash-month-wrap', 'loadDashboard()', 'dash-month'],
+    ['daily-month-wrap', 'loadDaily()', 'daily-month'],
+    ['stores-month-wrap', 'loadStores()', 'stores-month'],
+    ['mf-month-wrap', 'loadMeta()', 'mf-month'],
+    ['mgm-wrap', 'loadManagers()', 'mgm'],
+  ]
+  monthSelects.forEach(([wrapId, onchange, selId]) => {
+    const wrap = document.getElementById(wrapId)
+    if (wrap) {
+      wrap.outerHTML = buildMonthSelect(selId, onchange).replace(`id="${selId}"`, `id="${selId}"`)
+    }
+  })
+  // Re-insert selects into DOM
+  monthSelects.forEach(([wrapId, onchange, selId]) => {
+    const wrap = document.getElementById(wrapId)
+    if (wrap) wrap.outerHTML = buildMonthSelect(selId, onchange)
+  })
 
   await loadDashboard()
 }
@@ -454,7 +492,7 @@ function profitBadge(v) {
 // ============================================================
 async function loadDashboard() {
   const month = document.getElementById('dash-month').value
-  const from = month+'-01', to = new Date(month.slice(0,4), month.slice(5,7), 0).toISOString().split('T')[0]
+  const from = month+'-01', to = new Date(parseInt(month.slice(0,4)), parseInt(month.slice(5,7)), 0).toISOString().split('T')[0]
 
   const [{data: rep}, {data: meta}] = await Promise.all([
     db.from('daily_reports').select('*').gte('report_date',from).lte('report_date',to),
@@ -535,7 +573,7 @@ async function loadDaily() {
   const month = monthEl.value || new Date().toISOString().slice(0,7)
   if (!monthEl.value) monthEl.value = month
   const storeFilter = document.getElementById('daily-store').value
-  const from = month+'-01', to = new Date(month.slice(0,4), month.slice(5,7), 0).toISOString().split('T')[0]
+  const from = month+'-01', to = new Date(parseInt(month.slice(0,4)), parseInt(month.slice(5,7)), 0).toISOString().split('T')[0]
 
   let q = db.from('daily_reports').select('*, stores(name)').gte('report_date',from).lte('report_date',to).order('report_date',{ascending:false})
   if (storeFilter) q = q.eq('store_id', storeFilter)
@@ -685,7 +723,7 @@ async function loadMonthly() {
 // ============================================================
 async function loadStores() {
   const month = document.getElementById('stores-month').value
-  const from = month+'-01', to = new Date(month.slice(0,4), month.slice(5,7), 0).toISOString().split('T')[0]
+  const from = month+'-01', to = new Date(parseInt(month.slice(0,4)), parseInt(month.slice(5,7)), 0).toISOString().split('T')[0]
 
   const [{data:rep},{data:meta}] = await Promise.all([
     db.from('daily_reports').select('*').gte('report_date',from).lte('report_date',to),
@@ -739,7 +777,7 @@ async function loadStores() {
 async function loadMeta() {
   const month = document.getElementById('meta-month').value
   const storeFilter = document.getElementById('meta-store').value
-  const from = month+'-01', to = new Date(month.slice(0,4), month.slice(5,7), 0).toISOString().split('T')[0]
+  const from = month+'-01', to = new Date(parseInt(month.slice(0,4)), parseInt(month.slice(5,7)), 0).toISOString().split('T')[0]
 
   let q = db.from('meta_ads').select('*').gte('report_date',from).lte('report_date',to).order('report_date',{ascending:false})
   if (storeFilter) q = q.eq('store_id',storeFilter)
@@ -795,7 +833,7 @@ async function deleteMeta(id) {
 // ============================================================
 async function loadManagers() {
   const month = document.getElementById('mgr-month').value
-  const from = month+'-01', to = new Date(month.slice(0,4), month.slice(5,7), 0).toISOString().split('T')[0]
+  const from = month+'-01', to = new Date(parseInt(month.slice(0,4)), parseInt(month.slice(5,7)), 0).toISOString().split('T')[0]
 
   const {data} = await db.from('manager_daily').select('*, managers(name,rate_per_order,upsell_pct), stores(name)')
     .gte('report_date',from).lte('report_date',to)
