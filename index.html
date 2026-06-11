@@ -608,11 +608,8 @@ function drawChart(id, config) {
 // DAILY
 // ============================================================
 async function loadDaily() {
-  const monthEl = document.getElementById('daily-month')
-  const month = monthEl.value || new Date().toISOString().slice(0,7)
-  if (!monthEl.value) monthEl.value = month
+  const { from, to } = getDateRange('daily')
   const storeFilter = document.getElementById('daily-store').value
-  const from = month+'-01', to = new Date(parseInt(month.slice(0,4)), parseInt(month.slice(5,7)), 0).toISOString().split('T')[0]
 
   let q = db.from('daily_reports').select('*, stores(name)').gte('report_date',from).lte('report_date',to).order('report_date',{ascending:false})
   if (storeFilter) q = q.eq('store_id', storeFilter)
@@ -761,8 +758,7 @@ async function loadMonthly() {
 // STORES
 // ============================================================
 async function loadStores() {
-  const month = document.getElementById('stores-month').value
-  const from = month+'-01', to = new Date(parseInt(month.slice(0,4)), parseInt(month.slice(5,7)), 0).toISOString().split('T')[0]
+  const { from, to } = getDateRange('stores')
 
   const [{data:rep},{data:meta}] = await Promise.all([
     db.from('daily_reports').select('*').gte('report_date',from).lte('report_date',to),
@@ -814,9 +810,8 @@ async function loadStores() {
 // META
 // ============================================================
 async function loadMeta() {
-  const month = document.getElementById('meta-month').value
+  const { from, to } = getDateRange('meta')
   const storeFilter = document.getElementById('meta-store').value
-  const from = month+'-01', to = new Date(parseInt(month.slice(0,4)), parseInt(month.slice(5,7)), 0).toISOString().split('T')[0]
 
   let q = db.from('meta_ads').select('*').gte('report_date',from).lte('report_date',to).order('report_date',{ascending:false})
   if (storeFilter) q = q.eq('store_id',storeFilter)
@@ -871,8 +866,7 @@ async function deleteMeta(id) {
 // MANAGERS
 // ============================================================
 async function loadManagers() {
-  const month = document.getElementById('mgr-month').value
-  const from = month+'-01', to = new Date(parseInt(month.slice(0,4)), parseInt(month.slice(5,7)), 0).toISOString().split('T')[0]
+  const { from, to } = getDateRange('mgr')
 
   const {data} = await db.from('manager_daily').select('*, managers(name,rate_per_order,upsell_pct), stores(name)')
     .gte('report_date',from).lte('report_date',to)
