@@ -381,17 +381,21 @@ function buildDateFilter(prefix, onchange) {
 }
 
 function getDateRange(prefix) {
-  const year = document.getElementById(prefix+'-year')?.value || new Date().getFullYear()
-  const month = document.getElementById(prefix+'-month')?.value
-  const day = document.getElementById(prefix+'-day')?.value
+  const yearEl = document.getElementById(prefix+'-year')
+  const monthEl = document.getElementById(prefix+'-month')
+  const dayEl = document.getElementById(prefix+'-day')
+  const year = yearEl?.value || String(new Date().getFullYear())
+  const month = monthEl?.value || ''
+  const day = dayEl?.value || ''
 
   if (day && month) {
     const d = `${year}-${month}-${day}`
     return { from: d, to: d }
   }
   if (month) {
-    const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate()
-    return { from: `${year}-${month}-01`, to: `${year}-${month}-${lastDay}` }
+    const y = parseInt(year), m = parseInt(month)
+    const lastDay = new Date(y, m, 0).getDate()
+    return { from: `${year}-${month}-01`, to: `${year}-${month}-${String(lastDay).padStart(2,'0')}` }
   }
   return { from: `${year}-01-01`, to: `${year}-12-31` }
 }
