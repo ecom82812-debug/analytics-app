@@ -157,7 +157,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
 <div class="page active" id="page-dashboard">
   <div class="page-header">
     <div><div class="page-title">Дашборд</div><div class="page-sub">Загальна аналітика по всіх магазинах</div></div>
-    <span id="dash-month-wrap"></span>
+    <span id="dash-filter-wrap"></span>
   </div>
   <div class="kpi-grid kpi-grid-4" id="dash-kpi1"></div>
   <div class="kpi-grid kpi-grid-4" id="dash-kpi2"></div>
@@ -174,7 +174,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
     <div><div class="page-title">По днях</div><div class="page-sub">Щоденні звіти</div></div>
     <div class="filters">
       <select id="daily-store" onchange="loadDaily()"><option value="">Всі магазини</option></select>
-      <span id="daily-month-wrap"></span>
+      <span id="daily-filter-wrap"></span>
       <button class="btn btn-primary" onclick="showPage('entry')">+ Внести день</button>
     </div>
   </div>
@@ -204,7 +204,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
 <div class="page" id="page-stores-page">
   <div class="page-header">
     <div><div class="page-title">Порівняння магазинів</div><div class="page-sub">Кожен магазин окремо</div></div>
-    <span id="stores-month-wrap"></span>
+    <span id="stores-filter-wrap"></span>
   </div>
   <div class="store-cards" id="stores-content"><div class="loading">Завантаження...</div></div>
 </div>
@@ -349,6 +349,53 @@ const db = createClient(SUPABASE_URL, SUPABASE_KEY)
 
 const UA_MONTHS = ['Січень','Лютий','Березень','Квітень','Травень','Червень','Липень','Серпень','Вересень','Жовтень','Листопад','Грудень']
 
+function buildDateFilter(prefix, onchange) {
+  const now = new Date()
+  const curYear = now.getFullYear()
+  const curMonth = now.getMonth()
+  const curDay = now.getDate()
+
+  let yearOpts = ''
+  for (let y = curYear; y >= curYear - 2; y--) {
+    yearOpts += `<option value="${y}" ${y===curYear?'selected':''}>${y}</option>`
+  }
+
+  let monthOpts = '<option value="">Всі місяці</option>'
+  UA_MONTHS.forEach((m, i) => {
+    const val = String(i+1).padStart(2,'0')
+    monthOpts += `<option value="${val}" ${i===curMonth?'selected':''}>${m}</option>`
+  })
+
+  let dayOpts = '<option value="">Весь місяць</option>'
+  for (let d = 1; d <= 31; d++) {
+    dayOpts += `<option value="${String(d).padStart(2,'0')}">${d}</option>`
+  }
+
+  const sel = (id, opts, onch) => `<select id="${id}" onchange="${onch}" style="border:1px solid #d1d5db;border-radius:6px;padding:6px 9px;font-size:12.5px;background:#fff;font-family:inherit">${opts}</select>`
+
+  return `<div style="display:flex;align-items:center;gap:6px">
+    ${sel(prefix+'-year', yearOpts, onchange)}
+    ${sel(prefix+'-month', monthOpts, onchange)}
+    ${sel(prefix+'-day', dayOpts, onchange)}
+  </div>`
+}
+
+function getDateRange(prefix) {
+  const year = document.getElementById(prefix+'-year')?.value || new Date().getFullYear()
+  const month = document.getElementById(prefix+'-month')?.value
+  const day = document.getElementById(prefix+'-day')?.value
+
+  if (day && month) {
+    const d = `${year}-${month}-${day}`
+    return { from: d, to: d }
+  }
+  if (month) {
+    const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate()
+    return { from: `${year}-${month}-01`, to: `${year}-${month}-${lastDay}` }
+  }
+  return { from: `${year}-01-01`, to: `${year}-12-31` }
+}
+
 function buildMonthSelect(id, onchange) {
   const now = new Date()
   const curYear = now.getFullYear()
@@ -403,24 +450,17 @@ async function init() {
   renderMgrButtons()
   renderSettingsLists()
 
-  // Build month selects
-  const monthSelects = [
-    ['dash-month-wrap', 'loadDashboard()', 'dash-month'],
-    ['daily-month-wrap', 'loadDaily()', 'daily-month'],
-    ['stores-month-wrap', 'loadStores()', 'stores-month'],
-    ['mf-month-wrap', 'loadMeta()', 'mf-month'],
-    ['mgm-wrap', 'loadManagers()', 'mgm'],
+  // Build date filters
+  const filters = [
+    ['dash-filter-wrap', 'loadDashboard()', 'dash'],
+    ['daily-filter-wrap', 'loadDaily()', 'daily'],
+    ['stores-filter-wrap', 'loadStores()', 'stores'],
+    ['meta-filter-wrap', 'loadMeta()', 'meta'],
+    ['mgr-filter-wrap', 'loadManagers()', 'mgr'],
   ]
-  monthSelects.forEach(([wrapId, onchange, selId]) => {
+  filters.forEach(([wrapId, onchange, prefix]) => {
     const wrap = document.getElementById(wrapId)
-    if (wrap) {
-      wrap.outerHTML = buildMonthSelect(selId, onchange).replace(`id="${selId}"`, `id="${selId}"`)
-    }
-  })
-  // Re-insert selects into DOM
-  monthSelects.forEach(([wrapId, onchange, selId]) => {
-    const wrap = document.getElementById(wrapId)
-    if (wrap) wrap.outerHTML = buildMonthSelect(selId, onchange)
+    if (wrap) wrap.outerHTML = buildDateFilter(prefix, onchange)
   })
 
   await loadDashboard()
@@ -487,8 +527,7 @@ function profitBadge(v) {
 // DASHBOARD
 // ============================================================
 async function loadDashboard() {
-  const month = document.getElementById('dash-month').value
-  const from = month+'-01', to = new Date(parseInt(month.slice(0,4)), parseInt(month.slice(5,7)), 0).toISOString().split('T')[0]
+  const { from, to } = getDateRange('dash')
 
   const [{data: rep}, {data: meta}] = await Promise.all([
     db.from('daily_reports').select('*').gte('report_date',from).lte('report_date',to),
@@ -625,7 +664,7 @@ async function deleteDaily(id) {
 // MONTHLY
 // ============================================================
 async function loadMonthly() {
-  const year = document.getElementById('monthly-year').value
+  const year = document.getElementById('monthly-year')?.value || new Date().getFullYear()
   document.getElementById('monthly-content').innerHTML = '<div class="loading">Завантаження...</div>'
 
   const [{data:rep},{data:meta},{data:mgrData}] = await Promise.all([
