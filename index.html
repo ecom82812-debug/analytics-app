@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Аналітика бізнесу</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -344,7 +344,9 @@ const SUPABASE_URL = 'https://lvyssuomgbccjmksetof.supabase.co'
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx2eXNzdW9tZ2JjY2pta3NldG9mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExNTc1MjcsImV4cCI6MjA5NjczMzUyN30.AyhiYKQiSuTgl76PRrMwEjMFjxjh2IGOOUMJ9jE7csQ'
 
 let USD_RATE = 41
-const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+  global: { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+})
 
 // ============================================================
 // STATE
