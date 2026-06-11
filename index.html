@@ -157,7 +157,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
 <div class="page active" id="page-dashboard">
   <div class="page-header">
     <div><div class="page-title">Дашборд</div><div class="page-sub">Загальна аналітика по всіх магазинах</div></div>
-    <span id="dash-filter-wrap"></span>
+    <div style="display:flex;gap:8px;align-items:center"><button id="sync-btn" class="btn btn-p" onclick="syncSalesDrive()">🔄 Оновити з Sales Drive</button><span id="dash-filter-wrap"></span></div>
   </div>
   <div class="kpi-grid kpi-grid-4" id="dash-kpi1"></div>
   <div class="kpi-grid kpi-grid-4" id="dash-kpi2"></div>
@@ -1158,6 +1158,49 @@ function saveRate() {
 // ============================================================
 // START
 // ============================================================
+
+const SYNC_URL = 'https://lvyssuomgbccjmksetof.supabase.co/functions/v1/salesdrive-sync'
+let SERVICE_KEY = ''
+
+async function syncSalesDrive() {
+  if (!SERVICE_KEY) {
+    SERVICE_KEY = prompt('Введи service_role ключ від Supabase (тільки перший раз):') || ''
+    if (!SERVICE_KEY) return
+    localStorage.setItem('sb_service_key', SERVICE_KEY)
+  }
+  
+  const btn = document.getElementById('sync-btn')
+  btn.textContent = '⏳ Синхронізація...'
+  btn.disabled = true
+  
+  try {
+    const res = await fetch(SYNC_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${SERVICE_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    const data = await res.json()
+    if (data.success) {
+      toast(`✓ ${data.message}`)
+      loadDashboard()
+    } else {
+      toast('Помилка: ' + data.error, false)
+    }
+  } catch(e) {
+    toast('Помилка з'єднання', false)
+  }
+  
+  btn.textContent = '🔄 Оновити з Sales Drive'
+  btn.disabled = false
+}
+
+// Restore service key from localStorage
+if (typeof localStorage !== 'undefined') {
+  SERVICE_KEY = localStorage.getItem('sb_service_key') || ''
+}
+
 init()
 </script>
 </body>
