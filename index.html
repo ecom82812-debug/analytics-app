@@ -157,7 +157,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
 <div class="page active" id="page-dashboard">
   <div class="page-header">
     <div><div class="page-title">Дашборд</div><div class="page-sub">Загальна аналітика по всіх магазинах</div></div>
-    <div style="display:flex;gap:8px;align-items:center"><button id="sync-btn" class="btn btn-p" onclick="syncSalesDrive()">🔄 Оновити з Sales Drive</button><span id="dash-filter-wrap"></span></div>
+    <div style="display:flex;gap:8px;align-items:center"><button id="sync-btn" class="btn btn-p" onclick="syncQuick()">🔄 Оновити з Sales Drive</button><span id="dash-filter-wrap"></span></div>
   </div>
   <div class="kpi-grid kpi-grid-4" id="dash-kpi1"></div>
   <div class="kpi-grid kpi-grid-4" id="dash-kpi2"></div>
@@ -1199,6 +1199,116 @@ async function syncSalesDrive() {
 // Restore service key from localStorage
 if (typeof localStorage !== 'undefined') {
   SERVICE_KEY = localStorage.getItem('sb_service_key') || ''
+}
+
+
+async function runSync() {
+  let sk = localStorage.getItem('sb_service_key') || ''
+  if (!sk) {
+    sk = prompt('Введи service_role ключ від Supabase:') || ''
+    if (!sk) return
+    localStorage.setItem('sb_service_key', sk)
+  }
+
+  const btn = document.getElementById('sync-run-btn')
+  const resultDiv = document.getElementById('sync-result')
+  const resultContent = document.getElementById('sync-result-content')
+  
+  btn.disabled = true
+  btn.textContent = '⏳ Синхронізація...'
+  resultDiv.style.display = 'none'
+
+  const dateFrom = document.getElementById('sync-from').value
+  const dateTo = document.getElementById('sync-to').value
+  const store = document.getElementById('sync-store').value
+
+  const body: any = { store }
+  if (dateFrom) body.dateFrom = dateFrom
+  if (dateTo) body.dateTo = dateTo
+
+  try {
+    const res = await fetch('https://lvyssuomgbccjmksetof.supabase.co/functions/v1/salesdrive-sync', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${sk}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    })
+    const data = await res.json()
+    
+    resultDiv.style.display = 'block'
+    
+    if (data.success) {
+      toast('✓ ' + data.message)
+      resultContent.innerHTML = `
+        <div style="color:#16a34a;font-weight:600;margin-bottom:12px">✓ ${data.message}</div>
+        <div style="font-size:12px;color:#6b7280;margin-bottom:12px">Всього замовлень отримано: ${data.total_orders}</div>
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr>
+            <th style="text-align:left;padding:8px;background:#fafafa;border-bottom:1px solid #e8eaed;font-size:11px">Дата</th>
+            <th style="text-align:left;padding:8px;background:#fafafa;border-bottom:1px solid #e8eaed;font-size:11px">Магазин</th>
+            <th style="text-align:right;padding:8px;background:#fafafa;border-bottom:1px solid #e8eaed;font-size:11px">Всього</th>
+            <th style="text-align:right;padding:8px;background:#fafafa;border-bottom:1px solid #e8eaed;font-size:11px">Підтв.</th>
+            <th style="text-align:right;padding:8px;background:#fafafa;border-bottom:1px solid #e8eaed;font-size:11px">Відмов</th>
+            <th style="text-align:right;padding:8px;background:#fafafa;border-bottom:1px solid #e8eaed;font-size:11px">Виручка</th>
+            <th style="text-align:right;padding:8px;background:#fafafa;border-bottom:1px solid #e8eaed;font-size:11px">Закупка</th>
+          </tr></thead>
+          <tbody>
+            ${(data.results||[]).map((r:any) => `<tr>
+              <td style="padding:8px;border-bottom:1px solid #f3f4f6;font-size:12px">${r.date}</td>
+              <td style="padding:8px;border-bottom:1px solid #f3f4f6;font-size:12px"><span class="bdg b-blue">${r.store}</span></td>
+              <td style="padding:8px;border-bottom:1px solid #f3f4f6;font-size:12px;text-align:right">${r.total}</td>
+              <td style="padding:8px;border-bottom:1px solid #f3f4f6;font-size:12px;text-align:right">${r.confirmed}</td>
+              <td style="padding:8px;border-bottom:1px solid #f3f4f6;font-size:12px;text-align:right;color:#dc2626">${r.refusals}</td>
+              <td style="padding:8px;border-bottom:1px solid #f3f4f6;font-size:12px;text-align:right">${r.revenue.toLocaleString('uk-UA')} грн</td>
+              <td style="padding:8px;border-bottom:1px solid #f3f4f6;font-size:12px;text-align:right">${r.purchase_cost.toLocaleString('uk-UA')} грн</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`
+      
+      // Refresh current page data
+      loadDashboard()
+    } else {
+      toast('Помилка: ' + data.error, false)
+      resultContent.innerHTML = `<div style="color:#dc2626">Помилка: ${data.error}</div>`
+    }
+  } catch(e: any) {
+    toast('Помилка з'єднання', false)
+    resultContent.innerHTML = `<div style="color:#dc2626">Помилка з'єднання: ${e.message}</div>`
+  }
+
+  btn.disabled = false
+  btn.textContent = '🔄 Запустити синхронізацію'
+}
+
+// Set default sync dates (last 14 days)
+const syncTo = new Date().toISOString().split('T')[0]
+const syncFrom = new Date(Date.now() - 14*24*60*60*1000).toISOString().split('T')[0]
+document.getElementById('sync-from').value = syncFrom
+document.getElementById('sync-to').value = syncTo
+
+// Also update sync button on dashboard
+async function syncQuick() {
+  let sk = localStorage.getItem('sb_service_key') || ''
+  if (!sk) {
+    sk = prompt('Введи service_role ключ від Supabase:') || ''
+    if (!sk) return
+    localStorage.setItem('sb_service_key', sk)
+  }
+  const btn = document.getElementById('sync-btn')
+  if (btn) { btn.textContent = '⏳...'; btn.setAttribute('disabled','true') }
+  try {
+    const res = await fetch('https://lvyssuomgbccjmksetof.supabase.co/functions/v1/salesdrive-sync', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${sk}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    })
+    const data = await res.json()
+    toast(data.success ? '✓ ' + data.message : 'Помилка: ' + data.error, data.success)
+    if (data.success) loadDashboard()
+  } catch(e: any) { toast('Помилка', false) }
+  if (btn) { btn.textContent = '🔄 Оновити з Sales Drive'; btn.removeAttribute('disabled') }
 }
 
 init()
