@@ -1241,31 +1241,29 @@ async function runSync() {
     
     if (data.success) {
       toast('✓ ' + data.message)
-      resultContent.innerHTML = `
-        <div style="color:#16a34a;font-weight:600;margin-bottom:12px">✓ ${data.message}</div>
-        <div style="font-size:12px;color:#6b7280;margin-bottom:12px">Всього замовлень отримано: ${data.total_orders}</div>
-        <table style="width:100%;border-collapse:collapse">
-          <thead><tr>
-            <th style="text-align:left;padding:8px;background:#fafafa;border-bottom:1px solid #e8eaed;font-size:11px">Дата</th>
-            <th style="text-align:left;padding:8px;background:#fafafa;border-bottom:1px solid #e8eaed;font-size:11px">Магазин</th>
-            <th style="text-align:right;padding:8px;background:#fafafa;border-bottom:1px solid #e8eaed;font-size:11px">Всього</th>
-            <th style="text-align:right;padding:8px;background:#fafafa;border-bottom:1px solid #e8eaed;font-size:11px">Підтв.</th>
-            <th style="text-align:right;padding:8px;background:#fafafa;border-bottom:1px solid #e8eaed;font-size:11px">Відмов</th>
-            <th style="text-align:right;padding:8px;background:#fafafa;border-bottom:1px solid #e8eaed;font-size:11px">Виручка</th>
-            <th style="text-align:right;padding:8px;background:#fafafa;border-bottom:1px solid #e8eaed;font-size:11px">Закупка</th>
-          </tr></thead>
-          <tbody>
-            ${(data.results||[]).map((r) => `<tr>
-              <td style="padding:8px;border-bottom:1px solid #f3f4f6;font-size:12px">${r.date}</td>
-              <td style="padding:8px;border-bottom:1px solid #f3f4f6;font-size:12px"><span class="bdg b-blue">${r.store}</span></td>
-              <td style="padding:8px;border-bottom:1px solid #f3f4f6;font-size:12px;text-align:right">${r.total}</td>
-              <td style="padding:8px;border-bottom:1px solid #f3f4f6;font-size:12px;text-align:right">${r.confirmed}</td>
-              <td style="padding:8px;border-bottom:1px solid #f3f4f6;font-size:12px;text-align:right;color:#dc2626">${r.refusals}</td>
-              <td style="padding:8px;border-bottom:1px solid #f3f4f6;font-size:12px;text-align:right">${r.revenue.toLocaleString('uk-UA')} грн</td>
-              <td style="padding:8px;border-bottom:1px solid #f3f4f6;font-size:12px;text-align:right">${r.purchase_cost.toLocaleString('uk-UA')} грн</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>`
+      const rows = (data.results||[]).map(r =>
+        '<tr>' +
+        '<td style="padding:8px;border-bottom:1px solid #f3f4f6;font-size:12px">' + r.date + '</td>' +
+        '<td style="padding:8px;border-bottom:1px solid #f3f4f6;font-size:12px"><span class="bdg b-blue">' + r.store + '</span></td>' +
+        '<td style="padding:8px;border-bottom:1px solid #f3f4f6;font-size:12px;text-align:right">' + r.total + '</td>' +
+        '<td style="padding:8px;border-bottom:1px solid #f3f4f6;font-size:12px;text-align:right">' + r.confirmed + '</td>' +
+        '<td style="padding:8px;border-bottom:1px solid #f3f4f6;font-size:12px;text-align:right;color:#dc2626">' + r.refusals + '</td>' +
+        '<td style="padding:8px;border-bottom:1px solid #f3f4f6;font-size:12px;text-align:right">' + r.revenue.toLocaleString('uk-UA') + ' грн</td>' +
+        '<td style="padding:8px;border-bottom:1px solid #f3f4f6;font-size:12px;text-align:right">' + r.purchase_cost.toLocaleString('uk-UA') + ' грн</td>' +
+        '</tr>'
+      ).join('')
+      resultContent.innerHTML =
+        '<div style="color:#16a34a;font-weight:600;margin-bottom:12px">✓ ' + data.message + '</div>' +
+        '<div style="font-size:12px;color:#6b7280;margin-bottom:12px">Всього замовлень: ' + data.total_orders + '</div>' +
+        '<table style="width:100%;border-collapse:collapse"><thead><tr>' +
+        '<th style="text-align:left;padding:8px;background:#fafafa;border-bottom:1px solid #e8eaed;font-size:11px">Дата</th>' +
+        '<th style="text-align:left;padding:8px;background:#fafafa;border-bottom:1px solid #e8eaed;font-size:11px">Магазин</th>' +
+        '<th style="text-align:right;padding:8px;background:#fafafa;border-bottom:1px solid #e8eaed;font-size:11px">Всього</th>' +
+        '<th style="text-align:right;padding:8px;background:#fafafa;border-bottom:1px solid #e8eaed;font-size:11px">Підтв.</th>' +
+        '<th style="text-align:right;padding:8px;background:#fafafa;border-bottom:1px solid #e8eaed;font-size:11px">Відмов</th>' +
+        '<th style="text-align:right;padding:8px;background:#fafafa;border-bottom:1px solid #e8eaed;font-size:11px">Виручка</th>' +
+        '<th style="text-align:right;padding:8px;background:#fafafa;border-bottom:1px solid #e8eaed;font-size:11px">Закупка</th>' +
+        '</tr></thead><tbody>' + rows + '</tbody></table>'
       
       // Refresh current page data
       loadDashboard()
