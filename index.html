@@ -1222,7 +1222,7 @@ async function runSync() {
   const dateTo = document.getElementById('sync-to').value
   const store = document.getElementById('sync-store').value
 
-  const body: any = { store }
+  const body = { store }
   if (dateFrom) body.dateFrom = dateFrom
   if (dateTo) body.dateTo = dateTo
 
@@ -1255,7 +1255,7 @@ async function runSync() {
             <th style="text-align:right;padding:8px;background:#fafafa;border-bottom:1px solid #e8eaed;font-size:11px">Закупка</th>
           </tr></thead>
           <tbody>
-            ${(data.results||[]).map((r:any) => `<tr>
+            ${(data.results||[]).map((r) => `<tr>
               <td style="padding:8px;border-bottom:1px solid #f3f4f6;font-size:12px">${r.date}</td>
               <td style="padding:8px;border-bottom:1px solid #f3f4f6;font-size:12px"><span class="bdg b-blue">${r.store}</span></td>
               <td style="padding:8px;border-bottom:1px solid #f3f4f6;font-size:12px;text-align:right">${r.total}</td>
@@ -1273,7 +1273,7 @@ async function runSync() {
       toast('Помилка: ' + data.error, false)
       resultContent.innerHTML = `<div style="color:#dc2626">Помилка: ${data.error}</div>`
     }
-  } catch(e: any) {
+  } catch(e) {
     toast('Помилка з'єднання', false)
     resultContent.innerHTML = `<div style="color:#dc2626">Помилка з'єднання: ${e.message}</div>`
   }
@@ -1307,7 +1307,7 @@ async function syncQuick() {
     const data = await res.json()
     toast(data.success ? '✓ ' + data.message : 'Помилка: ' + data.error, data.success)
     if (data.success) loadDashboard()
-  } catch(e: any) { toast('Помилка', false) }
+  } catch(e) { toast('Помилка', false) }
   if (btn) { btn.textContent = '🔄 Оновити з Sales Drive'; btn.removeAttribute('disabled') }
 }
 
