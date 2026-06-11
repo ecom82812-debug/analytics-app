@@ -1189,7 +1189,7 @@ async function syncSalesDrive() {
       toast('Помилка: ' + data.error, false)
     }
   } catch(e) {
-    toast('Помилка з'єднання', false)
+    toast('Помилка зєднання', false)
   }
   
   btn.textContent = '🔄 Оновити з Sales Drive'
@@ -1272,8 +1272,8 @@ async function runSync() {
       resultContent.innerHTML = `<div style="color:#dc2626">Помилка: ${data.error}</div>`
     }
   } catch(e) {
-    toast('Помилка з'єднання', false)
-    resultContent.innerHTML = `<div style="color:#dc2626">Помилка з'єднання: ${e.message}</div>`
+    toast('Помилка зєднання', false)
+    resultContent.innerHTML = `<div style="color:#dc2626">Помилка зєднання: ${e.message}</div>`
   }
 
   btn.disabled = false
