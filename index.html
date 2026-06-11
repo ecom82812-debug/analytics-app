@@ -379,11 +379,7 @@ let charts = {}
 const today = new Date().toISOString().split('T')[0]
 const thisMonth = today.slice(0,7)
 
-document.getElementById('dash-month').value = thisMonth
-document.getElementById('daily-month').value = thisMonth
-document.getElementById('stores-month').value = thisMonth
-document.getElementById('meta-month').value = thisMonth
-document.getElementById('mgr-month').value = thisMonth
+// month selects are built dynamically in init()
 document.getElementById('e-date').value = today
 
 async function init() {
