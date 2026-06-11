@@ -148,6 +148,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
   <button class="nav-item" onclick="showPage('managers-page')">👥 Менеджери</button>
   <div class="nav-section">Система</div>
   <button class="nav-item highlight" onclick="showPage('entry')">✏️ Внести день</button>
+  <button class="nav-item" onclick="showPage('sync')">🔄 Синхронізація</button>
   <button class="nav-item" onclick="showPage('settings')">⚙️ Налаштування</button>
 </div>
 
@@ -332,6 +333,45 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
   </div>
 </div>
 
+<div class="page" id="page-sync">
+  <div class="ph"><div><div class="pt">Синхронізація Sales Drive</div><div class="ps">Ручне оновлення даних з CRM</div></div></div>
+  <div class="fs">
+    <div class="ft">Параметри синхронізації</div>
+    <div class="g2" style="margin-bottom:14px">
+      <div><label>Дата від</label><input type="date" id="sync-from"></div>
+      <div><label>Дата до</label><input type="date" id="sync-to"></div>
+    </div>
+    <div style="margin-bottom:14px">
+      <label>Магазин</label>
+      <select id="sync-store" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:7px 9px;font-size:13px;background:#fff">
+        <option value="all">Всі магазини</option>
+        <option value="moda24">moda24</option>
+        <option value="luxsecret">luxsecret</option>
+        <option value="madona">madona</option>
+      </select>
+    </div>
+    <button class="btn btn-p" id="sync-run-btn" onclick="runSync()" style="width:100%;justify-content:center;padding:12px;font-size:14px">🔄 Запустити синхронізацію</button>
+  </div>
+  <div id="sync-result" style="display:none" class="fs">
+    <div class="ft">Результат</div>
+    <div id="sync-result-content"></div>
+  </div>
+  <div class="fs">
+    <div class="ft">Автозапуск щодня о 23:00</div>
+    <p style="font-size:12px;color:#6b7280;margin-bottom:10px">Виконай в Supabase SQL Editor щоб увімкнути автозапуск:</p>
+    <pre id="cron-sql" style="background:#f8f9fb;border:1px solid #e8eaed;border-radius:8px;padding:12px;font-size:11px;overflow-x:auto;white-space:pre-wrap;color:#374151;cursor:pointer" onclick="copyCronSql()">select cron.schedule(
+  'salesdrive-daily-sync',
+  '0 20 * * *',
+  $$ select net.http_post(
+    url := 'https://lvyssuomgbccjmksetof.supabase.co/functions/v1/salesdrive-sync',
+    headers := '{&quot;Authorization&quot;:&quot;Bearer ВАШ_SERVICE_KEY&quot;,&quot;Content-Type&quot;:&quot;application/json&quot;}'::jsonb,
+    body := '{}'::jsonb
+  ); $$
+);</pre>
+    <button class="btn btn-ghost" onclick="copyCronSql()" style="margin-top:8px">📋 Скопіювати SQL</button>
+  </div>
+</div>
+
 </div><!-- /main -->
 
 <div id="toast"></div>
@@ -488,6 +528,14 @@ function showPage(id) {
     'meta-page': loadMeta,
     'managers-page': loadManagers,
     'settings': () => renderSettingsLists(),
+  'sync': () => {
+    const to = new Date().toISOString().split('T')[0]
+    const from = new Date(Date.now()-14*24*60*60*1000).toISOString().split('T')[0]
+    const f = document.getElementById('sync-from')
+    const t = document.getElementById('sync-to')
+    if (f && !f.value) f.value = from
+    if (t && !t.value) t.value = to
+  },
   }
   if (pageLoaders[id]) pageLoaders[id]()
 }
@@ -1307,6 +1355,11 @@ async function syncQuick() {
     if (data.success) loadDashboard()
   } catch(e) { toast('Помилка', false) }
   if (btn) { btn.textContent = '🔄 Оновити з Sales Drive'; btn.removeAttribute('disabled') }
+}
+
+function copyCronSql() {
+  const sql = document.getElementById('cron-sql')?.textContent || ''
+  navigator.clipboard.writeText(sql).then(() => toast('SQL скопійовано!')).catch(() => toast('Не вдалось скопіювати', false))
 }
 
 init()
