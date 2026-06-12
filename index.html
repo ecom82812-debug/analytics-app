@@ -168,6 +168,10 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
     <div class="chart-box"><div class="chart-title">Профіт по магазинах</div><canvas id="chart-stores" height="180"></canvas></div>
   </div>
   <div class="chart-box"><div class="chart-title">Виручка по днях</div><canvas id="chart-revenue" height="120"></canvas></div>
+  <div class="chart-box">
+    <div class="chart-title">Розклад чистого прибутку (waterfall)</div>
+    <div id="waterfall-content"></div>
+  </div>
 </div>
 
 <!-- DAILY -->
@@ -625,9 +629,10 @@ function profitBadge(v) {
 async function loadDashboard() {
   const { from, to } = getDateRange('dash')
 
-  const [{data: rep}, {data: meta}] = await Promise.all([
+  const [{data: rep}, {data: meta}, {data: mgrDaily}] = await Promise.all([
     db.from('daily_reports').select('*').gte('report_date',from).lte('report_date',to),
     db.from('meta_ads').select('*').gte('report_date',from).lte('report_date',to),
+    db.from('manager_daily').select('*, managers(rate_per_order,upsell_pct)').gte('report_date',from).lte('report_date',to),
   ])
 
   const reports = rep || [], metas = meta || []
@@ -638,7 +643,14 @@ async function loadDashboard() {
   const totOrders = reports.reduce((s,r) => s+r.confirmed_orders,0)
   const totRefusals = reports.reduce((s,r) => s+(r.refusals||0),0)
   const totPaymentsDash = reports.reduce((s,r) => s+Number(r.card_payments||0),0)
-  const totProfit = totRevenue - totPurchase - totAds*USD_RATE + totExtra - totRefusals*REFUSAL_PENALTY
+  const totAdsUah = totAds*USD_RATE
+  const totPenaltyDash = totRefusals*REFUSAL_PENALTY
+  const totMgrSalary = (mgrDaily||[]).reduce((s,m) => {
+    const rate = m.managers?.rate_per_order||16
+    const up = m.managers?.upsell_pct||0.25
+    return s + m.confirmed_orders*rate + Number(m.upsell_amount)*up
+  }, 0)
+  const totProfit = totRevenue - totPurchase - totAdsUah + totExtra - totPenaltyDash - totMgrSalary
   const totLeads = metas.reduce((s,m) => s+m.leads_total,0)
   const totConf = metas.reduce((s,m) => s+m.leads_confirmed,0)
   const totOrdersAll = reports.reduce((s,r) => s+(r.total_orders||0),0)
@@ -693,6 +705,36 @@ async function loadDashboard() {
     data:{labels:chartData.map(d=>d.date),datasets:[{label:'Виручка',data:chartData.map(d=>d.revenue),borderColor:'#2563eb',tension:.3,fill:false,pointRadius:3}]},
     options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>`${(v/1000).toFixed(0)}k`}}}}
   })
+
+  // Waterfall breakdown
+  const wfItems = [
+    { label: 'Виручка', value: totRevenue, type: 'plus' },
+    { label: 'Закупка', value: -totPurchase, type: 'minus' },
+    { label: `Реклама (${usd(totAds)})`, value: -totAdsUah, type: 'minus' },
+    { label: `Штраф за відмови (${num(totRefusals)} шт × ${REFUSAL_PENALTY}₴)`, value: -totPenaltyDash, type: 'minus' },
+    { label: 'З/П менеджерів', value: -totMgrSalary, type: 'minus' },
+    { label: 'Додатковий дохід', value: totExtra, type: 'plus' },
+  ]
+  const maxAbs = Math.max(totRevenue, ...wfItems.map(i=>Math.abs(i.value)), Math.abs(totProfit), 1)
+
+  document.getElementById('waterfall-content').innerHTML = wfItems.map(item => {
+    const widthPct = Math.min(100, Math.abs(item.value)/maxAbs*100)
+    const color = item.type==='plus' ? 'var(--green)' : 'var(--red)'
+    const sign = item.value >= 0 ? '+' : ''
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+        <span style="color:var(--muted)">${item.label}</span>
+        <span style="font-weight:600;color:${color}">${sign}${uah(item.value)}</span>
+      </div>
+      <div style="background:var(--bg);border-radius:4px;height:8px;overflow:hidden">
+        <div style="background:${color};height:100%;width:${widthPct}%;border-radius:4px"></div>
+      </div>
+    </div>`
+  }).join('') + `
+    <div style="border-top:2px solid var(--border);margin-top:14px;padding-top:10px;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-weight:700;font-size:14px">Чистий прибуток</span>
+      <span style="font-weight:700;font-size:18px;color:${totProfit>=0?'var(--green)':'var(--red)'}">${uah(totProfit)}</span>
+    </div>`
 }
 
 function drawChart(id, config) {
