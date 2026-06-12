@@ -167,6 +167,10 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
     <div class="chart-box"><div class="chart-title">Профіт по днях</div><canvas id="chart-profit" height="180"></canvas></div>
     <div class="chart-box"><div class="chart-title">Профіт по магазинах</div><canvas id="chart-stores" height="180"></canvas></div>
   </div>
+  <div class="charts-grid">
+    <div class="chart-box"><div class="chart-title">Замовлення і відмови по днях</div><canvas id="chart-orders" height="180"></canvas></div>
+    <div class="chart-box"><div class="chart-title">Замовлення по магазинах</div><canvas id="chart-orders-stores" height="180"></canvas></div>
+  </div>
   <div class="chart-box"><div class="chart-title">Виручка по днях</div><canvas id="chart-revenue" height="120"></canvas></div>
   <div class="chart-box">
     <div class="chart-title">Розклад чистого прибутку (waterfall)</div>
@@ -676,17 +680,21 @@ async function loadDashboard() {
   const byDate = {}
   reports.forEach(r => {
     const d = r.report_date.slice(5)
-    if (!byDate[d]) byDate[d] = {date:d,revenue:0,profit:0}
+    if (!byDate[d]) byDate[d] = {date:d,revenue:0,profit:0,orders:0,refusals:0}
     byDate[d].revenue += Number(r.revenue)
     byDate[d].profit += Number(r.revenue)-Number(r.purchase_cost)-Number(r.ads_budget_usd)*USD_RATE+Number(r.extra_income)-(r.refusals||0)*REFUSAL_PENALTY
+    byDate[d].orders += r.confirmed_orders
+    byDate[d].refusals += (r.refusals||0)
   })
   const chartData = Object.values(byDate).sort((a,b) => a.date.localeCompare(b.date))
 
   const byStore = {}
   reports.forEach(r => {
     const s = storeName(r.store_id)
-    if (!byStore[s]) byStore[s] = {name:s,profit:0}
+    if (!byStore[s]) byStore[s] = {name:s,profit:0,orders:0,refusals:0}
     byStore[s].profit += Number(r.revenue)-Number(r.purchase_cost)-Number(r.ads_budget_usd)*USD_RATE+Number(r.extra_income)-(r.refusals||0)*REFUSAL_PENALTY
+    byStore[s].orders += r.confirmed_orders
+    byStore[s].refusals += (r.refusals||0)
   })
   const storeData = Object.values(byStore)
 
@@ -699,6 +707,22 @@ async function loadDashboard() {
     type:'bar',
     data:{labels:storeData.map(d=>d.name),datasets:[{label:'Профіт',data:storeData.map(d=>d.profit),backgroundColor:'#1a2e4a',borderRadius:4}]},
     options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>`${(v/1000).toFixed(0)}k`}}}}
+  })
+  drawChart('chart-orders', {
+    type:'bar',
+    data:{labels:chartData.map(d=>d.date),datasets:[
+      {label:'Замовлення',data:chartData.map(d=>d.orders),backgroundColor:'#16a34a',borderRadius:4},
+      {label:'Відмови',data:chartData.map(d=>d.refusals),backgroundColor:'#dc2626',borderRadius:4}
+    ]},
+    options:{responsive:true,plugins:{legend:{display:true,position:'top'}},scales:{x:{stacked:false},y:{beginAtZero:true}}}
+  })
+  drawChart('chart-orders-stores', {
+    type:'bar',
+    data:{labels:storeData.map(d=>d.name),datasets:[
+      {label:'Замовлення',data:storeData.map(d=>d.orders),backgroundColor:'#16a34a',borderRadius:4},
+      {label:'Відмови',data:storeData.map(d=>d.refusals),backgroundColor:'#dc2626',borderRadius:4}
+    ]},
+    options:{responsive:true,plugins:{legend:{display:true,position:'top'}},scales:{y:{beginAtZero:true}}}
   })
   drawChart('chart-revenue', {
     type:'line',
