@@ -162,7 +162,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
     <div style="display:flex;gap:8px;align-items:center"><button id="sync-btn" class="btn btn-p" onclick="syncQuick()">🔄 Оновити з Sales Drive</button><span id="dash-filter-wrap"></span></div>
   </div>
   <div class="kpi-grid kpi-grid-4" id="dash-kpi1"></div>
-  <div class="kpi-grid kpi-grid-4" id="dash-kpi2"></div>
+  <div class="kpi-grid kpi-grid-5" id="dash-kpi2"></div>
   <div class="charts-grid">
     <div class="chart-box"><div class="chart-title">Профіт по днях</div><canvas id="chart-profit" height="180"></canvas></div>
     <div class="chart-box"><div class="chart-title">Профіт по магазинах</div><canvas id="chart-stores" height="180"></canvas></div>
@@ -637,6 +637,7 @@ async function loadDashboard() {
   const totExtra = reports.reduce((s,r) => s+Number(r.extra_income),0)
   const totOrders = reports.reduce((s,r) => s+r.confirmed_orders,0)
   const totRefusals = reports.reduce((s,r) => s+(r.refusals||0),0)
+  const totPaymentsDash = reports.reduce((s,r) => s+Number(r.card_payments||0),0)
   const totProfit = totRevenue - totPurchase - totAds*USD_RATE + totExtra - totRefusals*REFUSAL_PENALTY
   const totLeads = metas.reduce((s,m) => s+m.leads_total,0)
   const totConf = metas.reduce((s,m) => s+m.leads_confirmed,0)
@@ -655,6 +656,7 @@ async function loadDashboard() {
     <div class="kpi"><div class="kpi-label">Ціна ліда</div><div class="kpi-value ${cpl>0&&cpl<=4?'green':cpl>4?'red':''}">${usd(cpl)}</div><div class="kpi-hint">ціль ≤ 4$</div></div>
     <div class="kpi"><div class="kpi-label">КЦ лідів</div><div class="kpi-value">${pct(kc)}</div><div class="kpi-hint">${num(totConf)} з ${num(totLeads)}</div></div>
     <div class="kpi"><div class="kpi-label">Закупка</div><div class="kpi-value">${uah(totPurchase)}</div><div class="kpi-hint">маржа: ${uah(totRevenue-totPurchase)}</div></div>
+    <div class="kpi"><div class="kpi-label">Оплати на рахунок</div><div class="kpi-value">${uah(totPaymentsDash)}</div></div>
   `
 
   // Charts
@@ -805,13 +807,14 @@ async function loadMonthly() {
     const month = r.report_date.slice(0,7)
     const store = storeName(r.store_id)
     const key = `${month}|${store}`
-    if (!grouped[key]) grouped[key] = {month,store,revenue:0,purchase:0,ads:0,extra:0,orders:0,leads:0,conf_leads:0,mgr_salary:0,refusals:0}
+    if (!grouped[key]) grouped[key] = {month,store,revenue:0,purchase:0,ads:0,extra:0,orders:0,leads:0,conf_leads:0,mgr_salary:0,refusals:0,payments:0}
     grouped[key].revenue += Number(r.revenue)
     grouped[key].purchase += Number(r.purchase_cost)
     grouped[key].ads += Number(r.ads_budget_usd)
     grouped[key].extra += Number(r.extra_income)
     grouped[key].orders += r.confirmed_orders
     grouped[key].refusals += (r.refusals||0)
+    grouped[key].payments += Number(r.card_payments||0)
   }
   for (const m of (meta||[])) {
     const month = m.report_date.slice(0,7)
@@ -840,6 +843,7 @@ async function loadMonthly() {
     const totRevenue = rows.reduce((s,r)=>s+r.revenue,0)
     const totProfit = rows.reduce((s,r)=>s+r.revenue-r.purchase-r.ads*USD_RATE+r.extra-r.mgr_salary-(r.refusals||0)*REFUSAL_PENALTY,0)
     const totOrders = rows.reduce((s,r)=>s+r.orders,0)
+    const totPayments = rows.reduce((s,r)=>s+(r.payments||0),0)
     const label = new Date(month+'-02').toLocaleDateString('uk-UA',{month:'long',year:'numeric'})
 
     return `<div class="month-block">
@@ -849,6 +853,7 @@ async function loadMonthly() {
           <span>Виручка: <strong>${uah(totRevenue)}</strong></span>
           <span>Профіт: <strong>${uah(totProfit)}</strong></span>
           <span>Замовлень: <strong>${num(totOrders)}</strong></span>
+          <span>Оплати на рахунок: <strong>${uah(totPayments)}</strong></span>
         </div>
       </div>
       <div class="table-wrap"><table>
@@ -895,13 +900,14 @@ async function loadStores() {
   const grouped = {}
   for (const r of (rep||[])) {
     const s = storeName(r.store_id)
-    if (!grouped[s]) grouped[s] = {name:s,revenue:0,purchase:0,ads:0,extra:0,orders:0,leads:0,conf_leads:0,refusals:0,sold:0}
+    if (!grouped[s]) grouped[s] = {name:s,revenue:0,purchase:0,ads:0,extra:0,orders:0,leads:0,conf_leads:0,refusals:0,sold:0,payments:0}
     grouped[s].revenue += Number(r.revenue)
     grouped[s].purchase += Number(r.purchase_cost)
     grouped[s].ads += Number(r.ads_budget_usd)
     grouped[s].extra += Number(r.extra_income)
     grouped[s].refusals += (r.refusals||0)
     grouped[s].sold += (r.sold_orders||0)
+    grouped[s].payments += Number(r.card_payments||0)
     grouped[s].orders += r.confirmed_orders
   }
   for (const m of (meta||[])) {
@@ -933,6 +939,7 @@ async function loadStores() {
       <div class="store-stat"><span class="store-stat-label">Реклама</span><span class="store-stat-value">${usd(s.ads)}</span></div>
       <div class="store-stat"><span class="store-stat-label">Відмови (${num(s.refusals||0)} шт)</span><span class="store-stat-value" style="color:var(--red)">-${uah((s.refusals||0)*REFUSAL_PENALTY)}</span></div>
       <div class="store-stat"><span class="store-stat-label">% викупу</span><span class="store-stat-value" style="color:${(s.orders+(s.refusals||0))>0 && (s.sold||0)/(s.orders+(s.refusals||0))>=0.65?'var(--green)':'var(--amber)'}">${(s.orders+(s.refusals||0))>0?pct((s.sold||0)/(s.orders+(s.refusals||0))):'—'}</span></div>
+      <div class="store-stat"><span class="store-stat-label">Оплати на рахунок</span><span class="store-stat-value">${uah(s.payments||0)}</span></div>
     </div>`
   }).join('')
 }
