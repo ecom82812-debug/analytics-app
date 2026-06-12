@@ -243,11 +243,14 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
 <div class="page" id="page-managers-page">
   <div class="page-header">
     <div><div class="page-title">Менеджери</div><div class="page-sub">З/П та ефективність</div></div>
-    <div style="display:flex;align-items:center;gap:8px">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span id="mgr-filter-wrap"></span>
+      <span style="color:var(--muted);font-size:12px">або</span>
       <label style="margin:0;font-size:12.5px">Від</label>
-      <input type="date" id="mgr-from" onchange="loadManagers()" style="border:1px solid #d1d5db;border-radius:6px;padding:6px 9px;font-size:12.5px">
+      <input type="date" id="mgr-from" onchange="onMgrRangeChange()" style="border:1px solid #d1d5db;border-radius:6px;padding:6px 9px;font-size:12.5px">
       <label style="margin:0;font-size:12.5px">До</label>
-      <input type="date" id="mgr-to" onchange="loadManagers()" style="border:1px solid #d1d5db;border-radius:6px;padding:6px 9px;font-size:12.5px">
+      <input type="date" id="mgr-to" onchange="onMgrRangeChange()" style="border:1px solid #d1d5db;border-radius:6px;padding:6px 9px;font-size:12.5px">
+      <button class="btn btn-ghost btn-sm" onclick="clearMgrRange()" title="Скинути діапазон і використовувати рік/місяць/день">✕</button>
     </div>
   </div>
   <div id="mgr-fop" style="margin-bottom:16px"></div>
@@ -1105,14 +1108,15 @@ async function deleteMeta(id) {
 // MANAGERS
 // ============================================================
 async function loadManagers() {
-  const today = new Date().toISOString().split('T')[0]
-  const monthStart = today.slice(0,8) + '01'
   const fromEl = document.getElementById('mgr-from')
   const toEl = document.getElementById('mgr-to')
-  if (fromEl && !fromEl.value) fromEl.value = monthStart
-  if (toEl && !toEl.value) toEl.value = today
-  const from = fromEl.value
-  const to = toEl.value
+  let from, to
+  if (fromEl?.value && toEl?.value) {
+    from = fromEl.value
+    to = toEl.value
+  } else {
+    ;({ from, to } = getDateRange('mgr'))
+  }
 
   const [{data}, {data:reports}] = await Promise.all([
     db.from('manager_daily').select('*, managers(name,rate_per_order,upsell_pct,profit_share_pct,profit_share_store), stores(name)')
@@ -1772,6 +1776,16 @@ async function saveAdsEntry() {
 document.getElementById('usd-rate').value = USD_RATE
 document.getElementById('refusal-penalty').value = REFUSAL_PENALTY
 updateRateDisplays()
+
+function onMgrRangeChange() {
+  loadManagers()
+}
+
+function clearMgrRange() {
+  document.getElementById('mgr-from').value = ''
+  document.getElementById('mgr-to').value = ''
+  loadManagers()
+}
 
 init()
 </script>
