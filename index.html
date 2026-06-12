@@ -148,6 +148,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
   <button class="nav-item" onclick="showPage('managers-page')">👥 Менеджери</button>
   <div class="nav-section">Система</div>
   <button class="nav-item highlight" onclick="showPage('entry')">✏️ Внести день</button>
+  <button class="nav-item highlight" onclick="showPage('ads-entry')" style="background:#0ea5e9">📣 Внести рекламу</button>
   <button class="nav-item" onclick="showPage('sync')">🔄 Синхронізація</button>
   <button class="nav-item" onclick="showPage('settings')">⚙️ Налаштування</button>
 </div>
@@ -267,7 +268,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
       <div><label>Оплати на рахунок, грн</label><input type="number" id="e-card" placeholder="12000"></div>
       <div><label>Закупка, грн</label><input type="number" id="e-purchase" placeholder="30337" oninput="calcProfit()"></div>
       <div><label>Рекламний бюджет, $</label><input type="number" id="e-ads" placeholder="173.00" oninput="calcProfit()"></div>
-      <div><label>Ціна ліда, $</label><input type="number" id="e-cpl" placeholder="2.50"></div>
+      <div><label>Ціна ліда (CPO)</label><div style="padding:8px 10px;background:var(--bg);border-radius:6px;font-size:13px;color:var(--muted)" id="e-cpo-display">Рахується автоматично</div></div>
       <div><label>Додатковий дохід, грн</label><input type="number" id="e-extra" placeholder="0" value="0" oninput="calcProfit()"></div>
       <div><label>Нотатки</label><input type="text" id="e-notes" placeholder="Коментарі..."></div>
     </div>
@@ -299,6 +300,30 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
 </div>
 
 <!-- SETTINGS -->
+<div class="page" id="page-ads-entry">
+  <div class="page-header">
+    <div><div class="page-title">Внести рекламу</div><div class="page-sub">Тільки рекламний бюджет — решта підтягнеться з синхронізації</div></div>
+  </div>
+  <div class="form-section">
+    <div class="form-grid form-grid-2">
+      <div><label>Магазин</label><select id="ads-store" onchange="loadAdsCurrentData()"></select></div>
+      <div><label>Дата</label><input type="date" id="ads-date" onchange="loadAdsCurrentData()"></div>
+    </div>
+    <div style="margin-top:14px">
+      <label>Рекламний бюджет, $</label>
+      <input type="number" id="ads-budget" placeholder="173.00" oninput="calcAdsCpo()">
+    </div>
+    <div class="calc-box" id="ads-calc-box" style="display:none;margin-top:14px">
+      <div><div class="calc-item-label">Підтв. замовлень</div><div class="calc-item-value" id="ads-orders-display">0</div></div>
+      <div><div class="calc-item-label">CPO факт</div><div class="calc-item-value" id="ads-cpo-fact">0 грн</div></div>
+      <div><div class="calc-item-label">CPO план (фікс.)</div><div class="calc-item-value" id="ads-cpo-fixed">—</div></div>
+    </div>
+    <div id="ads-warning" style="display:none;background:var(--amber-bg);border:1px solid #fde68a;border-radius:8px;padding:10px 14px;color:var(--amber);margin-top:14px;font-size:13px"></div>
+  </div>
+  <div id="ads-error" style="display:none;background:var(--red-bg);border:1px solid var(--red-border);border-radius:8px;padding:10px 14px;color:var(--red);margin-bottom:12px;font-size:13px"></div>
+  <button class="btn btn-primary" id="ads-save-btn" onclick="saveAdsEntry()" style="width:100%;justify-content:center;padding:12px;font-size:14px">Зберегти рекламу</button>
+</div>
+
 <div class="page" id="page-settings">
   <div class="page-header">
     <div><div class="page-title">Налаштування</div><div class="page-sub">Магазини, менеджери, ставки</div></div>
@@ -535,6 +560,15 @@ function showPage(id) {
     const t = document.getElementById('sync-to')
     if (f && !f.value) f.value = from
     if (t && !t.value) t.value = to
+  },
+  'ads-entry': () => {
+    if (!document.getElementById('ads-date').value) {
+      document.getElementById('ads-date').value = new Date().toISOString().split('T')[0]
+    }
+    if (!document.getElementById('ads-store').value && allStores.length) {
+      document.getElementById('ads-store').innerHTML = allStores.map(s=>`<option value="${s.id}">${s.name}</option>`).join('')
+    }
+    loadAdsCurrentData()
   },
   }
   if (pageLoaders[id]) pageLoaders[id]()
@@ -1453,6 +1487,103 @@ async function syncQuick() {
 function copyCronSql() {
   const sql = document.getElementById('cron-sql')?.textContent || ''
   navigator.clipboard.writeText(sql).then(() => toast('SQL скопійовано!')).catch(() => toast('Не вдалось скопіювати', false))
+}
+
+
+// ============================================================
+// ADS ENTRY — окрема форма для реклами
+// ============================================================
+let adsCurrentData = null
+
+async function loadAdsCurrentData() {
+  const storeId = document.getElementById('ads-store').value
+  const date = document.getElementById('ads-date').value
+  if (!storeId || !date) return
+
+  const { data } = await db.from('daily_reports')
+    .select('confirmed_orders, ads_budget_usd, cpo_fixed')
+    .eq('store_id', storeId).eq('report_date', date).single()
+
+  adsCurrentData = data || { confirmed_orders: 0, ads_budget_usd: 0, cpo_fixed: null }
+
+  // Pre-fill budget if already set
+  document.getElementById('ads-budget').value = adsCurrentData.ads_budget_usd > 0 ? adsCurrentData.ads_budget_usd : ''
+
+  const warnEl = document.getElementById('ads-warning')
+  if (adsCurrentData.confirmed_orders === 0) {
+    warnEl.style.display = 'block'
+    warnEl.textContent = '⚠️ За цей день ще немає синхронізованих замовлень. Спочатку зроби синхронізацію з Sales Drive.'
+  } else {
+    warnEl.style.display = 'none'
+  }
+
+  calcAdsCpo()
+}
+
+function calcAdsCpo() {
+  if (!adsCurrentData) { document.getElementById('ads-calc-box').style.display = 'none'; return }
+
+  const budget = Number(document.getElementById('ads-budget').value) || 0
+  const orders = adsCurrentData.confirmed_orders || 0
+
+  document.getElementById('ads-calc-box').style.display = 'grid'
+  document.getElementById('ads-orders-display').textContent = num(orders) + ' шт'
+
+  const cpoFact = orders > 0 ? (budget * USD_RATE) / orders : 0
+  document.getElementById('ads-cpo-fact').textContent = orders > 0 ? uah(cpoFact) : '—'
+
+  const fixed = adsCurrentData.cpo_fixed
+  if (fixed !== null && fixed !== undefined) {
+    document.getElementById('ads-cpo-fixed').textContent = uah(Number(fixed)) + ' (вже зафіксовано)'
+  } else if (budget > 0 && orders > 0) {
+    document.getElementById('ads-cpo-fixed').textContent = uah(cpoFact) + ' (буде зафіксовано)'
+  } else {
+    document.getElementById('ads-cpo-fixed').textContent = '—'
+  }
+}
+
+async function saveAdsEntry() {
+  const btn = document.getElementById('ads-save-btn')
+  const errEl = document.getElementById('ads-error')
+  const storeId = document.getElementById('ads-store').value
+  const date = document.getElementById('ads-date').value
+  const budget = Number(document.getElementById('ads-budget').value) || 0
+
+  if (!storeId || !date) { errEl.style.display='block'; errEl.textContent='Оберіть магазин і дату'; return }
+
+  btn.disabled = true; btn.textContent = 'Зберігаємо...'
+  errEl.style.display = 'none'
+
+  try {
+    const { data: existing } = await db.from('daily_reports')
+      .select('id, confirmed_orders, cpo_fixed')
+      .eq('store_id', storeId).eq('report_date', date).single()
+
+    const orders = existing?.confirmed_orders || 0
+    const payload = {
+      store_id: storeId,
+      report_date: date,
+      ads_budget_usd: budget,
+      updated_at: new Date().toISOString(),
+    }
+
+    const hasFixedCpo = existing && existing.cpo_fixed !== null && existing.cpo_fixed !== undefined
+    if (!hasFixedCpo && budget > 0 && orders > 0) {
+      payload.cpo_fixed = (budget * USD_RATE) / orders
+    }
+
+    const { error } = await db.from('daily_reports').upsert(payload, { onConflict: 'store_id,report_date' })
+    if (error) throw error
+
+    toast('✓ Рекламу збережено!')
+    btn.textContent = '✓ Збережено!'
+    setTimeout(() => { btn.textContent = 'Зберегти рекламу'; btn.disabled = false }, 2000)
+    loadAdsCurrentData()
+  } catch (e) {
+    errEl.style.display = 'block'
+    errEl.textContent = e.message || 'Помилка збереження'
+    btn.textContent = 'Зберегти рекламу'; btn.disabled = false
+  }
 }
 
 init()
