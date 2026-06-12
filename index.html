@@ -180,11 +180,11 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
       <button class="btn btn-primary" onclick="showPage('entry')">+ Внести день</button>
     </div>
   </div>
-  <div class="kpi-grid kpi-grid-3" id="daily-kpi"></div>
+  <div class="kpi-grid kpi-grid-4" id="daily-kpi"></div>
   <div class="card">
     <div class="table-wrap"><table>
       <thead><tr>
-        <th>Дата</th><th>Магазин</th><th>Замовл.</th><th>Виручка</th><th>Закупка</th><th>Реклама $</th><th>Профіт</th><th>CPO план $</th><th>CPO факт $</th><th>Всього замовл.</th><th>КЦ</th><th>Дії</th>
+        <th>Дата</th><th>Магазин</th><th>Замовл.</th><th>Виручка</th><th>Оплати</th><th>Закупка</th><th>Реклама $</th><th>Профіт</th><th>CPO план $</th><th>CPO факт $</th><th>Всього замовл.</th><th>КЦ</th><th>Дії</th>
       </tr></thead>
       <tbody id="daily-tbody"><tr><td colspan="10" class="loading">Завантаження...</td></tr></tbody>
     </table></div>
@@ -705,15 +705,17 @@ async function loadDaily() {
   const totRevenue = reports.reduce((s,r)=>s+Number(r.revenue),0)
   const totProfit = reports.reduce((s,r)=>s+Number(r.revenue)-Number(r.purchase_cost)-Number(r.ads_budget_usd)*USD_RATE+Number(r.extra_income),0)
   const totOrders = reports.reduce((s,r)=>s+r.confirmed_orders,0)
+  const totPayments = reports.reduce((s,r)=>s+Number(r.card_payments),0)
 
   document.getElementById('daily-kpi').innerHTML = `
     <div class="kpi"><div class="kpi-label">Профіт за період</div><div class="kpi-value ${totProfit>=0?'green':'red'}">${uah(totProfit)}</div></div>
     <div class="kpi"><div class="kpi-label">Виручка за період</div><div class="kpi-value">${uah(totRevenue)}</div></div>
+    <div class="kpi"><div class="kpi-label">Оплати на рахунок</div><div class="kpi-value">${uah(totPayments)}</div></div>
     <div class="kpi"><div class="kpi-label">Замовлень за період</div><div class="kpi-value">${num(totOrders)}</div></div>
   `
 
   if (!reports.length) {
-    document.getElementById('daily-tbody').innerHTML = '<tr><td colspan="12" class="empty"><div class="empty-icon">📭</div>Немає даних — <a href="#" onclick="showPage(\'entry\')" style="color:var(--brand2)">внести перший день →</a></td></tr>'
+    document.getElementById('daily-tbody').innerHTML = '<tr><td colspan="13" class="empty"><div class="empty-icon">📭</div>Немає даних — <a href="#" onclick="showPage(\'entry\')" style="color:var(--brand2)">внести перший день →</a></td></tr>'
     return
   }
 
@@ -730,6 +732,12 @@ async function loadDaily() {
       <td>${mkBadge(r.stores?.name || storeName(r.store_id))}</td>
       <td class="td-right">${num(r.confirmed_orders)}</td>
       <td class="td-right">${uah(Number(r.revenue))}</td>
+      <td class="td-right">
+        <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px">
+          <span id="payments-view-${r.id}">${uah(Number(r.card_payments))}</span>
+          <button class="btn btn-ghost btn-sm" style="padding:2px 6px" onclick="editPayments('${r.id}', ${Number(r.card_payments)})" title="Редагувати">✏️</button>
+        </div>
+      </td>
       <td class="td-right">${uah(Number(r.purchase_cost))}</td>
       <td class="td-right">${usd(Number(r.ads_budget_usd))}</td>
       <td class="td-right">${profitBadge(profit)}</td>
@@ -746,6 +754,21 @@ async function deleteDaily(id) {
   if (!confirm('Видалити цей запис?')) return
   await db.from('daily_reports').delete().eq('id',id)
   toast('Видалено')
+  loadDaily()
+}
+
+function editPayments(id, current) {
+  const cell = document.getElementById('payments-view-' + id)
+  cell.innerHTML = `<input type="number" id="payments-input-${id}" value="${current}" style="width:90px;padding:4px 6px;font-size:12px;border:1px solid var(--border2);border-radius:4px;text-align:right" onkeydown="if(event.key==='Enter')savePayments('${id}')">
+    <button class="btn btn-primary btn-sm" style="padding:2px 8px;margin-left:4px" onclick="savePayments('${id}')">✓</button>`
+  document.getElementById('payments-input-'+id).focus()
+}
+
+async function savePayments(id) {
+  const input = document.getElementById('payments-input-' + id)
+  const value = Number(input.value) || 0
+  await db.from('daily_reports').update({ card_payments: value }).eq('id', id)
+  toast('Збережено')
   loadDaily()
 }
 
@@ -921,7 +944,7 @@ async function loadMeta() {
     <div class="kpi"><div class="kpi-label">Ціна ліда</div><div class="kpi-value ${cpl>0&&cpl<=4?'green':cpl>4?'red':''}">${usd(cpl)}</div><div class="kpi-hint">ціль ≤ 4$</div></div>
   `
 
-  if (!rows.length) { document.getElementById('meta-tbody').innerHTML = '<tr><td colspan="12" class="empty"><div class="empty-icon">📭</div>Немає даних</td></tr>'; return }
+  if (!rows.length) { document.getElementById('meta-tbody').innerHTML = '<tr><td colspan="13" class="empty"><div class="empty-icon">📭</div>Немає даних</td></tr>'; return }
 
   document.getElementById('meta-tbody').innerHTML = rows.map(r => {
     const ctr = r.impressions ? r.clicks/r.impressions : 0
