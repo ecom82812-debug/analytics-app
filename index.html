@@ -146,6 +146,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
   <div class="nav-section">Деталі</div>
   <button class="nav-item" onclick="showPage('meta-page')">📣 Реклама Meta</button>
   <button class="nav-item" onclick="showPage('managers-page')">👥 Менеджери</button>
+  <button class="nav-item" onclick="showPage('products-page')">📦 Товари</button>
   <div class="nav-section">Система</div>
   <button class="nav-item highlight" onclick="showPage('entry')">✏️ Внести день</button>
   <button class="nav-item highlight" onclick="showPage('ads-entry')" style="background:#0ea5e9">📣 Внести рекламу</button>
@@ -339,6 +340,42 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
   </div>
   <div id="ads-error" style="display:none;background:var(--red-bg);border:1px solid var(--red-border);border-radius:8px;padding:10px 14px;color:var(--red);margin-bottom:12px;font-size:13px"></div>
   <button class="btn btn-primary" id="ads-save-btn" onclick="saveAdsEntry()" style="width:100%;justify-content:center;padding:12px;font-size:14px">Зберегти рекламу</button>
+</div>
+
+<div class="page" id="page-products-page">
+  <div class="page-header">
+    <div><div class="page-title">Товари</div><div class="page-sub">Топ продажів і відмов по магазинах</div></div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+      <span id="products-filter-wrap"></span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <select id="products-store" onchange="loadProducts()" style="border:1px solid #d1d5db;border-radius:6px;padding:6px 9px;font-size:12.5px;background:#fff;font-family:inherit"><option value="">Всі магазини</option></select>
+        <label style="margin:0;font-size:12px">або</label>
+        <input type="date" id="products-from" onchange="loadProducts()" style="border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:12px;font-family:inherit">
+        <span style="font-size:12px;color:var(--muted)">—</span>
+        <input type="date" id="products-to" onchange="loadProducts()" style="border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:12px;font-family:inherit">
+        <button class="btn btn-ghost btn-sm" onclick="clearProductsRange()" style="padding:4px 8px">✕</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="kpi-grid kpi-grid-4" id="products-kpi"></div>
+
+  <div class="charts-grid">
+    <div class="chart-box">
+      <div class="chart-title">🏆 Топ продажів</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Товар</th><th>SKU</th><th class="td-right">Продано</th><th class="td-right">Відмов</th><th class="td-right">% викупу</th><th class="td-right">Виручка</th></tr></thead>
+        <tbody id="top-sold-tbody"></tbody>
+      </table></div>
+    </div>
+    <div class="chart-box">
+      <div class="chart-title">⚠️ Топ відмов</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Товар</th><th>SKU</th><th class="td-right">Продано</th><th class="td-right">Відмов</th><th class="td-right">% викупу</th><th class="td-right">Виручка</th></tr></thead>
+        <tbody id="top-refused-tbody"></tbody>
+      </table></div>
+    </div>
+  </div>
 </div>
 
 <div class="page" id="page-settings">
@@ -553,6 +590,7 @@ async function init() {
     ['stores-filter-wrap', 'loadStores()', 'stores'],
     ['meta-filter-wrap', 'loadMeta()', 'meta'],
     ['mgr-filter-wrap', 'loadManagers()', 'mgr'],
+    ['products-filter-wrap', 'loadProducts()', 'products'],
   ]
   filters.forEach(([wrapId, onchange, prefix]) => {
     const wrap = document.getElementById(wrapId)
@@ -597,6 +635,7 @@ function showPage(id) {
     }
     loadAdsCurrentData()
   },
+  'products-page': loadProducts,
   }
   if (pageLoaders[id]) pageLoaders[id]()
 }
@@ -1786,6 +1825,94 @@ function clearMgrRange() {
   document.getElementById('mgr-from').value = ''
   document.getElementById('mgr-to').value = ''
   loadManagers()
+}
+
+
+// ============================================================
+// PRODUCTS — топ продажів і відмов
+// ============================================================
+function clearProductsRange() {
+  document.getElementById('products-from').value = ''
+  document.getElementById('products-to').value = ''
+  loadProducts()
+}
+
+async function loadProducts() {
+  // Populate store select once
+  const storeSel = document.getElementById('products-store')
+  if (storeSel && storeSel.options.length <= 1 && allStores.length) {
+    storeSel.innerHTML = '<option value="">Всі магазини</option>' + allStores.map(s=>`<option value="${s.id}">${s.name}</option>`).join('')
+  }
+
+  const fromEl = document.getElementById('products-from')
+  const toEl = document.getElementById('products-to')
+  let from, to
+  if (fromEl?.value && toEl?.value) {
+    from = fromEl.value
+    to = toEl.value
+  } else {
+    ;({ from, to } = getDateRange('products'))
+  }
+
+  const storeFilter = document.getElementById('products-store')?.value
+
+  let q = db.from('product_stats').select('*').gte('report_date',from).lte('report_date',to)
+  if (storeFilter) q = q.eq('store_id', storeFilter)
+  const { data } = await q
+  const rows = data || []
+
+  // Aggregate by product_id (across dates/stores in range)
+  const agg = {}
+  for (const r of rows) {
+    const key = r.product_id
+    if (!agg[key]) agg[key] = { product_id: r.product_id, sku: r.sku, product_name: r.product_name, sold: 0, refused: 0, revenue: 0 }
+    agg[key].sold += r.sold_count
+    agg[key].refused += r.refused_count
+    agg[key].revenue += Number(r.revenue)
+    // Keep most recent non-empty name/sku
+    if (r.product_name) agg[key].product_name = r.product_name
+    if (r.sku) agg[key].sku = r.sku
+  }
+  const products = Object.values(agg)
+
+  // KPIs
+  const totSold = products.reduce((s,p)=>s+p.sold,0)
+  const totRefused = products.reduce((s,p)=>s+p.refused,0)
+  const totRevenue = products.reduce((s,p)=>s+p.revenue,0)
+  const overallRate = (totSold+totRefused)>0 ? totSold/(totSold+totRefused) : 0
+
+  document.getElementById('products-kpi').innerHTML = `
+    <div class="kpi"><div class="kpi-label">Унікальних товарів</div><div class="kpi-value">${num(products.length)}</div></div>
+    <div class="kpi"><div class="kpi-label">Продано (шт)</div><div class="kpi-value green">${num(totSold)}</div></div>
+    <div class="kpi"><div class="kpi-label">Відмов (шт)</div><div class="kpi-value red">${num(totRefused)}</div></div>
+    <div class="kpi"><div class="kpi-label">Виручка</div><div class="kpi-value">${uah(totRevenue)}</div></div>
+  `
+
+  if (!products.length) {
+    document.getElementById('top-sold-tbody').innerHTML = '<tr><td colspan="6" class="empty"><div class="empty-icon">📭</div>Немає даних — спершу синхронізуй за цей період</td></tr>'
+    document.getElementById('top-refused-tbody').innerHTML = '<tr><td colspan="6" class="empty"><div class="empty-icon">📭</div>Немає даних</td></tr>'
+    return
+  }
+
+  const renderRow = (p) => {
+    const rate = (p.sold+p.refused)>0 ? p.sold/(p.sold+p.refused) : 0
+    return `<tr>
+      <td>${p.product_name}</td>
+      <td style="color:var(--muted);font-size:11px">${p.sku||'—'}</td>
+      <td class="td-right" style="color:var(--green)">${num(p.sold)}</td>
+      <td class="td-right" style="color:${p.refused>0?'var(--red)':'inherit'}">${num(p.refused)}</td>
+      <td class="td-right">${(p.sold+p.refused)>0?pct(rate):'—'}</td>
+      <td class="td-right">${uah(p.revenue)}</td>
+    </tr>`
+  }
+
+  const topSold = [...products].sort((a,b)=>b.sold-a.sold).slice(0,15)
+  const topRefused = [...products].filter(p=>p.refused>0).sort((a,b)=>b.refused-a.refused).slice(0,15)
+
+  document.getElementById('top-sold-tbody').innerHTML = topSold.map(renderRow).join('')
+  document.getElementById('top-refused-tbody').innerHTML = topRefused.length
+    ? topRefused.map(renderRow).join('')
+    : '<tr><td colspan="6" class="empty">Немає відмов за цей період 🎉</td></tr>'
 }
 
 init()
