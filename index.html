@@ -935,15 +935,16 @@ async function loadMonthly() {
 async function loadStores() {
   const { from, to } = getDateRange('stores')
 
-  const [{data:rep},{data:meta}] = await Promise.all([
+  const [{data:rep},{data:meta},{data:mgrDaily}] = await Promise.all([
     db.from('daily_reports').select('*').gte('report_date',from).lte('report_date',to),
     db.from('meta_ads').select('*').gte('report_date',from).lte('report_date',to),
+    db.from('manager_daily').select('*, managers(rate_per_order,upsell_pct)').gte('report_date',from).lte('report_date',to),
   ])
 
   const grouped = {}
   for (const r of (rep||[])) {
     const s = storeName(r.store_id)
-    if (!grouped[s]) grouped[s] = {name:s,revenue:0,purchase:0,ads:0,extra:0,orders:0,leads:0,conf_leads:0,refusals:0,sold:0,payments:0}
+    if (!grouped[s]) grouped[s] = {name:s,revenue:0,purchase:0,ads:0,extra:0,orders:0,leads:0,conf_leads:0,refusals:0,sold:0,payments:0,mgr_salary:0}
     grouped[s].revenue += Number(r.revenue)
     grouped[s].purchase += Number(r.purchase_cost)
     grouped[s].ads += Number(r.ads_budget_usd)
@@ -957,14 +958,23 @@ async function loadStores() {
     const s = storeName(m.store_id)
     if (grouped[s]) { grouped[s].leads += m.leads_total; grouped[s].conf_leads += m.leads_confirmed }
   }
+  for (const m of (mgrDaily||[])) {
+    const s = storeName(m.store_id)
+    if (grouped[s]) {
+      const rate = m.managers?.rate_per_order||16
+      const up = m.managers?.upsell_pct||0.25
+      grouped[s].mgr_salary += m.confirmed_orders*rate + Number(m.upsell_amount)*up
+    }
+  }
 
   const data = Object.values(grouped)
-  const totalProfit = data.reduce((s,d)=>s+d.revenue-d.purchase-d.ads*USD_RATE+d.extra-(d.refusals||0)*REFUSAL_PENALTY,0)
+  const totalProfit = data.reduce((s,d)=>s+d.revenue-d.purchase-d.ads*USD_RATE+d.extra-(d.refusals||0)*REFUSAL_PENALTY-d.mgr_salary,0)
 
   if (!data.length) { document.getElementById('stores-content').innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">📭</div>Немає даних</div>'; return }
 
   document.getElementById('stores-content').innerHTML = data.map(s => {
-    const profit = s.revenue-s.purchase-s.ads*USD_RATE+s.extra-(s.refusals||0)*REFUSAL_PENALTY
+    const penalty = (s.refusals||0)*REFUSAL_PENALTY
+    const profit = s.revenue-s.purchase-s.ads*USD_RATE+s.extra-penalty-s.mgr_salary
     const share = totalProfit ? profit/totalProfit*100 : 0
     const roas = s.ads ? s.revenue/(s.ads*USD_RATE) : 0
     const kc = s.leads ? s.conf_leads/s.leads : 0
@@ -973,16 +983,17 @@ async function loadStores() {
         <div class="store-card-name">${s.name}</div>
         <span class="badge badge-blue">${share.toFixed(1)}% профіту</span>
       </div>
-      <div class="store-stat"><span class="store-stat-label">Профіт</span><span class="store-stat-value" style="color:${profit>=0?'var(--green)':'var(--red)'}">${uah(profit)}</span></div>
       <div class="store-stat"><span class="store-stat-label">Виручка</span><span class="store-stat-value">${uah(s.revenue)}</span></div>
       <div class="store-stat"><span class="store-stat-label">Закупка</span><span class="store-stat-value">${uah(s.purchase)}</span></div>
       <div class="store-stat"><span class="store-stat-label">ROAS</span><span class="store-stat-value" style="color:${roas>=3?'var(--green)':'var(--red)'}">${roas.toFixed(2)}x</span></div>
       <div class="store-stat"><span class="store-stat-label">Замовлень</span><span class="store-stat-value">${num(s.orders)}</span></div>
       <div class="store-stat"><span class="store-stat-label">КЦ лідів</span><span class="store-stat-value">${pct(kc)}</span></div>
       <div class="store-stat"><span class="store-stat-label">Реклама</span><span class="store-stat-value">${usd(s.ads)}</span></div>
-      <div class="store-stat"><span class="store-stat-label">Відмови (${num(s.refusals||0)} шт)</span><span class="store-stat-value" style="color:var(--red)">-${uah((s.refusals||0)*REFUSAL_PENALTY)}</span></div>
+      <div class="store-stat"><span class="store-stat-label">Відмови (${num(s.refusals||0)} шт)</span><span class="store-stat-value" style="color:var(--red)">-${uah(penalty)}</span></div>
       <div class="store-stat"><span class="store-stat-label">% викупу</span><span class="store-stat-value" style="color:${(s.orders+(s.refusals||0))>0 && (s.sold||0)/(s.orders+(s.refusals||0))>=0.65?'var(--green)':'var(--amber)'}">${(s.orders+(s.refusals||0))>0?pct((s.sold||0)/(s.orders+(s.refusals||0))):'—'}</span></div>
       <div class="store-stat"><span class="store-stat-label">Оплати на рахунок</span><span class="store-stat-value">${uah(s.payments||0)}</span></div>
+      <div class="store-stat"><span class="store-stat-label">З/П менеджерів</span><span class="store-stat-value">-${uah(s.mgr_salary||0)}</span></div>
+      <div class="store-stat" style="border-top:1px solid var(--border);margin-top:6px;padding-top:8px"><span class="store-stat-label" style="font-weight:700">Чистий прибуток</span><span class="store-stat-value" style="font-weight:700;font-size:15px;color:${profit>=0?'var(--green)':'var(--red)'}">${uah(profit)}</span></div>
     </div>`
   }).join('')
 }
