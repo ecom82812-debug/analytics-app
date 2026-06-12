@@ -1090,7 +1090,8 @@ async function loadManagers() {
       const storePurchase = storeReports.reduce((s,r)=>s+Number(r.purchase_cost),0)
       const storeAds = storeReports.reduce((s,r)=>s+Number(r.ads_budget_usd),0)
       const storeExtra = storeReports.reduce((s,r)=>s+Number(r.extra_income),0)
-      const storeProfit = storeRevenue - storePurchase - storeAds*USD_RATE + storeExtra
+      const storeRefusals = storeReports.reduce((s,r)=>s+(r.refusals||0),0)
+      const storeProfit = storeRevenue - storePurchase - storeAds*USD_RATE + storeExtra - storeRefusals*REFUSAL_PENALTY
       // subtract base salaries of ALL managers earned from this store
       const storeMgrSalaries = mgrStats.reduce((s, mm) => {
         const mmRows = rows.filter(r => r.manager_id===mm.id && r.stores?.name===m.profit_share_store)
