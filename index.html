@@ -995,8 +995,13 @@ async function loadManagers() {
         <td><strong>${r.managers?.name||'—'}</strong></td>
         <td>${mkBadge(r.stores?.name||'—')}</td>
         <td class="td-right">${num(r.confirmed_orders)}</td>
-        <td class="td-right">${uah(Number(r.upsell_amount))}</td>
-        <td class="td-right" style="color:var(--amber);font-weight:600">${uah(sal)}</td>
+        <td class="td-right">
+          <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px">
+            <span id="upsell-view-${r.id}">${uah(Number(r.upsell_amount))}</span>
+            <button class="btn btn-ghost btn-sm" style="padding:2px 6px" onclick="editUpsell('${r.id}', ${Number(r.upsell_amount)})" title="Редагувати допродаж">✏️</button>
+          </div>
+        </td>
+        <td class="td-right" id="sal-${r.id}" style="color:var(--amber);font-weight:600">${uah(sal)}</td>
         <td><button class="btn btn-danger btn-sm" onclick="deleteMgrDaily('${r.id}')">🗑</button></td>
       </tr>`
     }).join('')
@@ -1009,6 +1014,21 @@ async function deleteMgrDaily(id) {
   if (!confirm('Видалити запис?')) return
   await db.from('manager_daily').delete().eq('id',id)
   toast('Видалено'); loadManagers()
+}
+
+function editUpsell(id, current) {
+  const cell = document.getElementById('upsell-view-' + id)
+  cell.innerHTML = `<input type="number" id="upsell-input-${id}" value="${current}" style="width:80px;padding:4px 6px;font-size:12px;border:1px solid var(--border2);border-radius:4px;text-align:right" onkeydown="if(event.key==='Enter')saveUpsell('${id}')">
+    <button class="btn btn-primary btn-sm" style="padding:2px 8px;margin-left:4px" onclick="saveUpsell('${id}')">✓</button>`
+  document.getElementById('upsell-input-'+id).focus()
+}
+
+async function saveUpsell(id) {
+  const input = document.getElementById('upsell-input-' + id)
+  const value = Number(input.value) || 0
+  await db.from('manager_daily').update({ upsell_amount: value }).eq('id', id)
+  toast('Збережено')
+  loadManagers()
 }
 
 // ============================================================
