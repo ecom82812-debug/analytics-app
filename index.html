@@ -184,7 +184,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
   <div class="card">
     <div class="table-wrap"><table>
       <thead><tr>
-        <th>Дата</th><th>Магазин</th><th>Замовл.</th><th>Виручка</th><th>Закупка</th><th>Реклама $</th><th>Профіт</th><th>CPO план</th><th>CPO факт</th><th>Ліди</th><th>КЦ</th><th>Дії</th>
+        <th>Дата</th><th>Магазин</th><th>Замовл.</th><th>Виручка</th><th>Закупка</th><th>Реклама $</th><th>Профіт</th><th>CPO план $</th><th>CPO факт $</th><th>Всього замовл.</th><th>КЦ</th><th>Дії</th>
       </tr></thead>
       <tbody id="daily-tbody"><tr><td colspan="10" class="loading">Завантаження...</td></tr></tbody>
     </table></div>
@@ -718,11 +718,13 @@ async function loadDaily() {
   }
 
   document.getElementById('daily-tbody').innerHTML = reports.map(r => {
-    const m = metas.find(x => x.report_date===r.report_date && x.store_id===r.store_id)
     const profit = Number(r.revenue)-Number(r.purchase_cost)-Number(r.ads_budget_usd)*USD_RATE+Number(r.extra_income)
-    const kc = m && m.leads_total ? m.leads_confirmed/m.leads_total : null
-    const cpoFact = r.confirmed_orders > 0 ? (Number(r.ads_budget_usd)*USD_RATE)/r.confirmed_orders : 0
-    const cpoFixed = r.cpo_fixed !== null && r.cpo_fixed !== undefined ? Number(r.cpo_fixed) : null
+    const totalOrders = r.total_orders || 0
+    const kc = totalOrders > 0 ? r.confirmed_orders/totalOrders : null
+    // CPO в доларах: реклама($) / підтверджені замовлення
+    const cpoFact = r.confirmed_orders > 0 ? Number(r.ads_budget_usd)/r.confirmed_orders : 0
+    const cpoFixedUah = r.cpo_fixed !== null && r.cpo_fixed !== undefined ? Number(r.cpo_fixed) : null
+    const cpoFixedUsd = cpoFixedUah !== null ? cpoFixedUah / USD_RATE : null
     return `<tr>
       <td>${fdate(r.report_date)}</td>
       <td>${mkBadge(r.stores?.name || storeName(r.store_id))}</td>
@@ -731,9 +733,9 @@ async function loadDaily() {
       <td class="td-right">${uah(Number(r.purchase_cost))}</td>
       <td class="td-right">${usd(Number(r.ads_budget_usd))}</td>
       <td class="td-right">${profitBadge(profit)}</td>
-      <td class="td-right">${cpoFixed!==null?uah(cpoFixed):'—'}</td>
-      <td class="td-right">${r.ads_budget_usd>0?uah(cpoFact):'—'}</td>
-      <td class="td-right">${m?num(m.leads_total):'—'}</td>
+      <td class="td-right">${cpoFixedUsd!==null?usd(cpoFixedUsd):'—'}</td>
+      <td class="td-right">${r.ads_budget_usd>0?usd(cpoFact):'—'}</td>
+      <td class="td-right">${totalOrders>0?num(totalOrders):'—'}</td>
       <td class="td-right">${kc!==null?pct(kc):'—'}</td>
       <td><button class="btn btn-danger btn-sm" onclick="deleteDaily('${r.id}')">🗑</button></td>
     </tr>`
@@ -1529,14 +1531,14 @@ function calcAdsCpo() {
   document.getElementById('ads-calc-box').style.display = 'grid'
   document.getElementById('ads-orders-display').textContent = num(orders) + ' шт'
 
-  const cpoFact = orders > 0 ? (budget * USD_RATE) / orders : 0
-  document.getElementById('ads-cpo-fact').textContent = orders > 0 ? uah(cpoFact) : '—'
+  const cpoFact = orders > 0 ? budget / orders : 0
+  document.getElementById('ads-cpo-fact').textContent = orders > 0 ? usd(cpoFact) : '—'
 
   const fixed = adsCurrentData.cpo_fixed
   if (fixed !== null && fixed !== undefined) {
-    document.getElementById('ads-cpo-fixed').textContent = uah(Number(fixed)) + ' (вже зафіксовано)'
+    document.getElementById('ads-cpo-fixed').textContent = usd(Number(fixed)/USD_RATE) + ' (вже зафіксовано)'
   } else if (budget > 0 && orders > 0) {
-    document.getElementById('ads-cpo-fixed').textContent = uah(cpoFact) + ' (буде зафіксовано)'
+    document.getElementById('ads-cpo-fixed').textContent = usd(cpoFact) + ' (буде зафіксовано)'
   } else {
     document.getElementById('ads-cpo-fixed').textContent = '—'
   }
