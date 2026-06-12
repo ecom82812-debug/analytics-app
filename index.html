@@ -180,7 +180,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
       <button class="btn btn-primary" onclick="showPage('entry')">+ Внести день</button>
     </div>
   </div>
-  <div class="kpi-grid kpi-grid-4" id="daily-kpi"></div>
+  <div class="kpi-grid kpi-grid-5" id="daily-kpi"></div>
   <div class="card">
     <div class="table-wrap"><table>
       <thead><tr>
@@ -356,6 +356,15 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
       <button class="btn btn-ghost btn-sm" onclick="saveRate()">Зберегти</button>
     </div>
   </div>
+  <div class="form-section">
+    <div class="form-section-title">Штраф за відмову</div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <label style="margin:0">Сума</label>
+      <input type="number" id="refusal-penalty" style="width:100px">
+      <span style="color:var(--muted)">грн за кожну відмову (списує постачальник)</span>
+      <button class="btn btn-ghost btn-sm" onclick="savePenalty()">Зберегти</button>
+    </div>
+  </div>
 </div>
 
 <div class="page" id="page-sync">
@@ -409,6 +418,7 @@ const SUPABASE_URL = 'https://lvyssuomgbccjmksetof.supabase.co'
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx2eXNzdW9tZ2JjY2pta3NldG9mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExNTc1MjcsImV4cCI6MjA5NjczMzUyN30.AyhiYKQiSuTgl76PRrMwEjMFjxjh2IGOOUMJ9jE7csQ'
 
 let USD_RATE = Number(localStorage.getItem('usd_rate')) || 41
+let REFUSAL_PENALTY = Number(localStorage.getItem('refusal_penalty')) || 105
 const { createClient } = supabase
 const db = createClient(SUPABASE_URL, SUPABASE_KEY)
 
@@ -626,7 +636,8 @@ async function loadDashboard() {
   const totAds = reports.reduce((s,r) => s+Number(r.ads_budget_usd),0)
   const totExtra = reports.reduce((s,r) => s+Number(r.extra_income),0)
   const totOrders = reports.reduce((s,r) => s+r.confirmed_orders,0)
-  const totProfit = totRevenue - totPurchase - totAds*USD_RATE + totExtra
+  const totRefusals = reports.reduce((s,r) => s+(r.refusals||0),0)
+  const totProfit = totRevenue - totPurchase - totAds*USD_RATE + totExtra - totRefusals*REFUSAL_PENALTY
   const totLeads = metas.reduce((s,m) => s+m.leads_total,0)
   const totConf = metas.reduce((s,m) => s+m.leads_confirmed,0)
   const roas = totAds ? totRevenue/(totAds*USD_RATE) : 0
@@ -652,7 +663,7 @@ async function loadDashboard() {
     const d = r.report_date.slice(5)
     if (!byDate[d]) byDate[d] = {date:d,revenue:0,profit:0}
     byDate[d].revenue += Number(r.revenue)
-    byDate[d].profit += Number(r.revenue)-Number(r.purchase_cost)-Number(r.ads_budget_usd)*USD_RATE+Number(r.extra_income)
+    byDate[d].profit += Number(r.revenue)-Number(r.purchase_cost)-Number(r.ads_budget_usd)*USD_RATE+Number(r.extra_income)-(r.refusals||0)*REFUSAL_PENALTY
   })
   const chartData = Object.values(byDate).sort((a,b) => a.date.localeCompare(b.date))
 
@@ -660,7 +671,7 @@ async function loadDashboard() {
   reports.forEach(r => {
     const s = storeName(r.store_id)
     if (!byStore[s]) byStore[s] = {name:s,profit:0}
-    byStore[s].profit += Number(r.revenue)-Number(r.purchase_cost)-Number(r.ads_budget_usd)*USD_RATE+Number(r.extra_income)
+    byStore[s].profit += Number(r.revenue)-Number(r.purchase_cost)-Number(r.ads_budget_usd)*USD_RATE+Number(r.extra_income)-(r.refusals||0)*REFUSAL_PENALTY
   })
   const storeData = Object.values(byStore)
 
@@ -703,15 +714,18 @@ async function loadDaily() {
   const reports = rep||[], metas = meta||[]
 
   const totRevenue = reports.reduce((s,r)=>s+Number(r.revenue),0)
-  const totProfit = reports.reduce((s,r)=>s+Number(r.revenue)-Number(r.purchase_cost)-Number(r.ads_budget_usd)*USD_RATE+Number(r.extra_income),0)
+  const totProfit = reports.reduce((s,r)=>s+Number(r.revenue)-Number(r.purchase_cost)-Number(r.ads_budget_usd)*USD_RATE+Number(r.extra_income)-(r.refusals||0)*REFUSAL_PENALTY,0)
   const totOrders = reports.reduce((s,r)=>s+r.confirmed_orders,0)
   const totPayments = reports.reduce((s,r)=>s+Number(r.card_payments),0)
+  const totRefusalsKpi = reports.reduce((s,r)=>s+(r.refusals||0),0)
+  const totPenalty = totRefusalsKpi * REFUSAL_PENALTY
 
   document.getElementById('daily-kpi').innerHTML = `
     <div class="kpi"><div class="kpi-label">Профіт за період</div><div class="kpi-value ${totProfit>=0?'green':'red'}">${uah(totProfit)}</div></div>
     <div class="kpi"><div class="kpi-label">Виручка за період</div><div class="kpi-value">${uah(totRevenue)}</div></div>
     <div class="kpi"><div class="kpi-label">Оплати на рахунок</div><div class="kpi-value">${uah(totPayments)}</div></div>
     <div class="kpi"><div class="kpi-label">Замовлень за період</div><div class="kpi-value">${num(totOrders)}</div></div>
+    <div class="kpi"><div class="kpi-label">Штраф за відмови (${num(totRefusalsKpi)} шт)</div><div class="kpi-value red">-${uah(totPenalty)}</div></div>
   `
 
   if (!reports.length) {
@@ -720,7 +734,7 @@ async function loadDaily() {
   }
 
   document.getElementById('daily-tbody').innerHTML = reports.map(r => {
-    const profit = Number(r.revenue)-Number(r.purchase_cost)-Number(r.ads_budget_usd)*USD_RATE+Number(r.extra_income)
+    const profit = Number(r.revenue)-Number(r.purchase_cost)-Number(r.ads_budget_usd)*USD_RATE+Number(r.extra_income)-(r.refusals||0)*REFUSAL_PENALTY
     const totalOrders = r.total_orders || 0
     const kc = totalOrders > 0 ? r.confirmed_orders/totalOrders : null
     // CPO в доларах: реклама($) / підтверджені замовлення
@@ -791,12 +805,13 @@ async function loadMonthly() {
     const month = r.report_date.slice(0,7)
     const store = storeName(r.store_id)
     const key = `${month}|${store}`
-    if (!grouped[key]) grouped[key] = {month,store,revenue:0,purchase:0,ads:0,extra:0,orders:0,leads:0,conf_leads:0,mgr_salary:0}
+    if (!grouped[key]) grouped[key] = {month,store,revenue:0,purchase:0,ads:0,extra:0,orders:0,leads:0,conf_leads:0,mgr_salary:0,refusals:0}
     grouped[key].revenue += Number(r.revenue)
     grouped[key].purchase += Number(r.purchase_cost)
     grouped[key].ads += Number(r.ads_budget_usd)
     grouped[key].extra += Number(r.extra_income)
     grouped[key].orders += r.confirmed_orders
+    grouped[key].refusals += (r.refusals||0)
   }
   for (const m of (meta||[])) {
     const month = m.report_date.slice(0,7)
@@ -823,7 +838,7 @@ async function loadMonthly() {
   document.getElementById('monthly-content').innerHTML = months.map(month => {
     const rows = Object.values(grouped).filter(r=>r.month===month)
     const totRevenue = rows.reduce((s,r)=>s+r.revenue,0)
-    const totProfit = rows.reduce((s,r)=>s+r.revenue-r.purchase-r.ads*USD_RATE+r.extra-r.mgr_salary,0)
+    const totProfit = rows.reduce((s,r)=>s+r.revenue-r.purchase-r.ads*USD_RATE+r.extra-r.mgr_salary-(r.refusals||0)*REFUSAL_PENALTY,0)
     const totOrders = rows.reduce((s,r)=>s+r.orders,0)
     const label = new Date(month+'-02').toLocaleDateString('uk-UA',{month:'long',year:'numeric'})
 
@@ -840,7 +855,7 @@ async function loadMonthly() {
         <thead><tr><th>Магазин</th><th>Замовлень</th><th>Виручка</th><th>Закупка</th><th>Реклама $</th><th>З/П</th><th>Профіт</th><th>ROAS</th><th>Ліди</th><th>КЦ</th></tr></thead>
         <tbody>
           ${rows.map(r => {
-            const profit = r.revenue-r.purchase-r.ads*USD_RATE+r.extra-r.mgr_salary
+            const profit = r.revenue-r.purchase-r.ads*USD_RATE+r.extra-r.mgr_salary-(r.refusals||0)*REFUSAL_PENALTY
             const roas = r.ads ? r.revenue/(r.ads*USD_RATE) : 0
             const kc = r.leads ? r.conf_leads/r.leads : 0
             return `<tr>
@@ -880,11 +895,12 @@ async function loadStores() {
   const grouped = {}
   for (const r of (rep||[])) {
     const s = storeName(r.store_id)
-    if (!grouped[s]) grouped[s] = {name:s,revenue:0,purchase:0,ads:0,extra:0,orders:0,leads:0,conf_leads:0}
+    if (!grouped[s]) grouped[s] = {name:s,revenue:0,purchase:0,ads:0,extra:0,orders:0,leads:0,conf_leads:0,refusals:0}
     grouped[s].revenue += Number(r.revenue)
     grouped[s].purchase += Number(r.purchase_cost)
     grouped[s].ads += Number(r.ads_budget_usd)
     grouped[s].extra += Number(r.extra_income)
+    grouped[s].refusals += (r.refusals||0)
     grouped[s].orders += r.confirmed_orders
   }
   for (const m of (meta||[])) {
@@ -893,12 +909,12 @@ async function loadStores() {
   }
 
   const data = Object.values(grouped)
-  const totalProfit = data.reduce((s,d)=>s+d.revenue-d.purchase-d.ads*USD_RATE+d.extra,0)
+  const totalProfit = data.reduce((s,d)=>s+d.revenue-d.purchase-d.ads*USD_RATE+d.extra-(d.refusals||0)*REFUSAL_PENALTY,0)
 
   if (!data.length) { document.getElementById('stores-content').innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">📭</div>Немає даних</div>'; return }
 
   document.getElementById('stores-content').innerHTML = data.map(s => {
-    const profit = s.revenue-s.purchase-s.ads*USD_RATE+s.extra
+    const profit = s.revenue-s.purchase-s.ads*USD_RATE+s.extra-(s.refusals||0)*REFUSAL_PENALTY
     const share = totalProfit ? profit/totalProfit*100 : 0
     const roas = s.ads ? s.revenue/(s.ads*USD_RATE) : 0
     const kc = s.leads ? s.conf_leads/s.leads : 0
@@ -914,6 +930,7 @@ async function loadStores() {
       <div class="store-stat"><span class="store-stat-label">Замовлень</span><span class="store-stat-value">${num(s.orders)}</span></div>
       <div class="store-stat"><span class="store-stat-label">КЦ лідів</span><span class="store-stat-value">${pct(kc)}</span></div>
       <div class="store-stat"><span class="store-stat-label">Реклама</span><span class="store-stat-value">${usd(s.ads)}</span></div>
+      <div class="store-stat"><span class="store-stat-label">Відмови (${num(s.refusals||0)} шт)</span><span class="store-stat-value" style="color:var(--red)">-${uah((s.refusals||0)*REFUSAL_PENALTY)}</span></div>
     </div>`
   }).join('')
 }
@@ -1367,6 +1384,14 @@ function updateRateDisplays() {
   })
 }
 
+function savePenalty() {
+  REFUSAL_PENALTY = Number(document.getElementById('refusal-penalty').value)||105
+  localStorage.setItem('refusal_penalty', String(REFUSAL_PENALTY))
+  toast(`Штраф збережено: ${REFUSAL_PENALTY} грн`)
+  const activePage = document.querySelector('.page.active')?.id?.replace('page-','')
+  if (activePage) showPage(activePage)
+}
+
 // ============================================================
 // START
 // ============================================================
@@ -1624,6 +1649,7 @@ async function saveAdsEntry() {
 }
 
 document.getElementById('usd-rate').value = USD_RATE
+document.getElementById('refusal-penalty').value = REFUSAL_PENALTY
 updateRateDisplays()
 
 init()
