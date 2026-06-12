@@ -243,14 +243,15 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
 <div class="page" id="page-managers-page">
   <div class="page-header">
     <div><div class="page-title">Менеджери</div><div class="page-sub">З/П та ефективність</div></div>
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
       <span id="mgr-filter-wrap"></span>
-      <span style="color:var(--muted);font-size:12px">або</span>
-      <label style="margin:0;font-size:12.5px">Від</label>
-      <input type="date" id="mgr-from" onchange="onMgrRangeChange()" style="border:1px solid #d1d5db;border-radius:6px;padding:6px 9px;font-size:12.5px">
-      <label style="margin:0;font-size:12.5px">До</label>
-      <input type="date" id="mgr-to" onchange="onMgrRangeChange()" style="border:1px solid #d1d5db;border-radius:6px;padding:6px 9px;font-size:12.5px">
-      <button class="btn btn-ghost btn-sm" onclick="clearMgrRange()" title="Скинути діапазон і використовувати рік/місяць/день">✕</button>
+      <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)">
+        <span>або діапазон:</span>
+        <input type="date" id="mgr-from" onchange="onMgrRangeChange()" style="border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:12px;font-family:inherit">
+        <span>—</span>
+        <input type="date" id="mgr-to" onchange="onMgrRangeChange()" style="border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:12px;font-family:inherit">
+        <button class="btn btn-ghost btn-sm" onclick="clearMgrRange()" title="Скинути діапазон" style="padding:4px 8px">✕</button>
+      </div>
     </div>
   </div>
   <div id="mgr-fop" style="margin-bottom:16px"></div>
