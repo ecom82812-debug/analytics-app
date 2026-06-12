@@ -916,23 +916,52 @@ async function deleteMeta(id) {
 async function loadManagers() {
   const { from, to } = getDateRange('mgr')
 
-  const {data} = await db.from('manager_daily').select('*, managers(name,rate_per_order,upsell_pct), stores(name)')
-    .gte('report_date',from).lte('report_date',to)
+  const [{data}, {data:reports}] = await Promise.all([
+    db.from('manager_daily').select('*, managers(name,rate_per_order,upsell_pct,profit_share_pct,profit_share_store), stores(name)')
+      .gte('report_date',from).lte('report_date',to),
+    db.from('daily_reports').select('*, stores(name)')
+      .gte('report_date',from).lte('report_date',to)
+  ])
   const rows = data||[]
+  const reportRows = reports||[]
 
-  // Cards per manager
+  // Base salary per manager (rate + upsell)
   const mgrStats = allManagers.map(m => {
     const mRows = rows.filter(r=>r.manager_id===m.id)
     const totOrders = mRows.reduce((s,r)=>s+r.confirmed_orders,0)
     const totUpsell = mRows.reduce((s,r)=>s+Number(r.upsell_amount),0)
-    const salary = calcMgrSalary(totOrders, totUpsell, m.rate_per_order, m.upsell_pct)
+    const baseSalary = calcMgrSalary(totOrders, totUpsell, m.rate_per_order, m.upsell_pct)
     const orderPay = totOrders * m.rate_per_order
     const upsellPay = totUpsell * m.upsell_pct
-    return {...m, totOrders, totUpsell, salary, orderPay, upsellPay}
+    return {...m, totOrders, totUpsell, baseSalary, orderPay, upsellPay, bonusPay:0, bonusBase:0}
   })
 
-  const totalFop = mgrStats.reduce((s,m)=>s+m.salary,0)
-  document.getElementById('mgr-fop').innerHTML = `<div class="kpi" style="display:inline-block"><div class="kpi-label">Загальний ФОП за місяць</div><div class="kpi-value amber">${uah(totalFop)}</div></div>`
+  const totalBaseFop = mgrStats.reduce((s,m)=>s+m.baseSalary,0)
+
+  // Profit-share bonus: for each store with profit_share, calc net profit and distribute
+  for (const m of mgrStats) {
+    if (m.profit_share_pct > 0 && m.profit_share_store) {
+      const storeReports = reportRows.filter(r => r.stores?.name === m.profit_share_store)
+      const storeRevenue = storeReports.reduce((s,r)=>s+Number(r.revenue),0)
+      const storePurchase = storeReports.reduce((s,r)=>s+Number(r.purchase_cost),0)
+      const storeAds = storeReports.reduce((s,r)=>s+Number(r.ads_budget_usd),0)
+      const storeExtra = storeReports.reduce((s,r)=>s+Number(r.extra_income),0)
+      const storeProfit = storeRevenue - storePurchase - storeAds*USD_RATE + storeExtra
+      // subtract base salaries of ALL managers earned from this store
+      const storeMgrSalaries = mgrStats.reduce((s, mm) => {
+        const mmRows = rows.filter(r => r.manager_id===mm.id && r.stores?.name===m.profit_share_store)
+        const o = mmRows.reduce((ss,r)=>ss+r.confirmed_orders,0)
+        const u = mmRows.reduce((ss,r)=>ss+Number(r.upsell_amount),0)
+        return s + calcMgrSalary(o, u, mm.rate_per_order, mm.upsell_pct)
+      }, 0)
+      const netProfit = storeProfit - storeMgrSalaries
+      m.bonusBase = netProfit
+      m.bonusPay = netProfit * m.profit_share_pct
+    }
+  }
+
+  const totalFop = mgrStats.reduce((s,m)=>s+m.baseSalary+m.bonusPay,0)
+  document.getElementById('mgr-fop').innerHTML = `<div class="kpi" style="display:inline-block"><div class="kpi-label">Загальний ФОП за період</div><div class="kpi-value amber">${uah(totalFop)}</div></div>`
 
   if (!allManagers.length) {
     document.getElementById('mgr-cards').innerHTML = '<div class="empty" style="grid-column:1/-1">Немає менеджерів — додай у <a href="#" onclick="showPage(\'settings\')" style="color:var(--brand2)">Налаштуваннях</a></div>'
@@ -942,11 +971,15 @@ async function loadManagers() {
   document.getElementById('mgr-cards').innerHTML = mgrStats.map(m => `
     <div class="mgr-month-card">
       <div class="mgr-month-name">${m.name}</div>
-      <div class="mgr-month-salary">${uah(m.salary)}</div>
+      <div class="mgr-month-salary">${uah(m.baseSalary + m.bonusPay)}</div>
       <div class="store-stat"><span class="store-stat-label">Підтв. замовлень</span><span class="store-stat-value">${num(m.totOrders)} шт</span></div>
       <div class="store-stat"><span class="store-stat-label">Ставка (${uah(m.rate_per_order)}/шт)</span><span class="store-stat-value">${uah(m.orderPay)}</span></div>
       <div class="store-stat"><span class="store-stat-label">Допродажі</span><span class="store-stat-value">${uah(m.totUpsell)}</span></div>
       <div class="store-stat"><span class="store-stat-label">${Math.round(m.upsell_pct*100)}% від допродажів</span><span class="store-stat-value">${uah(m.upsellPay)}</span></div>
+      ${m.profit_share_pct > 0 ? `
+      <div class="store-stat" style="border-top:1px solid var(--border);margin-top:6px;padding-top:8px"><span class="store-stat-label">Чистий прибуток ${m.profit_share_store}</span><span class="store-stat-value">${uah(m.bonusBase)}</span></div>
+      <div class="store-stat"><span class="store-stat-label">${Math.round(m.profit_share_pct*100)}% від прибутку</span><span class="store-stat-value" style="color:var(--green)">${uah(m.bonusPay)}</span></div>
+      ` : ''}
     </div>
   `).join('')
 
@@ -1131,8 +1164,20 @@ async function renderSettingsLists() {
 
   document.getElementById('mgrs-list').innerHTML = (m||[]).map(mg => `
     <div class="settings-item">
-      <div class="settings-item-name">${mg.name}</div>
-      <div class="settings-item-sub">${mg.rate_per_order} грн/замовл. · ${Math.round(mg.upsell_pct*100)}% допрод.</div>
+      <div style="flex:1">
+        <div class="settings-item-name">${mg.name}</div>
+        <div class="settings-item-sub">${mg.rate_per_order} грн/замовл. · ${Math.round(mg.upsell_pct*100)}% допрод.${mg.profit_share_pct>0?` · +${Math.round(mg.profit_share_pct*100)}% прибутку ${mg.profit_share_store||''}`:''}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)">
+        <span>% прибутку:</span>
+        <input type="number" class="input" style="width:50px;padding:4px 6px;font-size:11px" value="${Math.round((mg.profit_share_pct||0)*100)}" onblur="updateProfitShare('${mg.id}','pct',this.value)">
+        <select class="input" style="width:90px;padding:4px 6px;font-size:11px" onchange="updateProfitShare('${mg.id}','store',this.value)">
+          <option value="">—</option>
+          <option value="moda24" ${mg.profit_share_store==='moda24'?'selected':''}>moda24</option>
+          <option value="luxsecret" ${mg.profit_share_store==='luxsecret'?'selected':''}>luxsecret</option>
+          <option value="madona" ${mg.profit_share_store==='madona'?'selected':''}>madona</option>
+        </select>
+      </div>
       <span class="badge ${mg.active?'badge-green':'badge-red'}">${mg.active?'Активний':'Неактивний'}</span>
       <button class="btn btn-ghost btn-sm" onclick="toggleMgr('${mg.id}',${mg.active})">${mg.active?'Вимкнути':'Увімкнути'}</button>
       <button class="btn btn-danger btn-sm" onclick="deleteMgr('${mg.id}')">🗑</button>
@@ -1184,6 +1229,15 @@ async function addManager() {
   const {data} = await db.from('managers').select('*').eq('active',true).order('name')
   allManagers = data||[]
   renderMgrButtons()
+  renderSettingsLists()
+}
+
+async function updateProfitShare(id, field, value) {
+  const update = {}
+  if (field === 'pct') update.profit_share_pct = (Number(value)||0) / 100
+  if (field === 'store') update.profit_share_store = value || null
+  await db.from('managers').update(update).eq('id', id)
+  toast('Збережено')
   renderSettingsLists()
 }
 
