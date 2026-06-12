@@ -250,7 +250,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
   <div class="card" id="mgr-detail-card" style="display:none">
     <div class="card-header"><span class="card-title">Деталі по днях</span></div>
     <div class="table-wrap"><table>
-      <thead><tr><th>Дата</th><th>Менеджер</th><th>Магазин</th><th>Підтв. замовл.</th><th>Допродажі</th><th>З/П</th><th>Дії</th></tr></thead>
+      <thead><tr><th>Дата</th><th>Менеджер</th><th>Магазин</th><th>Підтв. замовл.</th><th>Допродаж (всього)</th><th>Допродаж (продано)</th><th>З/П</th><th>Дії</th></tr></thead>
       <tbody id="mgr-tbody"></tbody>
     </table></div>
   </div>
@@ -1116,10 +1116,11 @@ async function loadManagers() {
     const mRows = rows.filter(r=>r.manager_id===m.id)
     const totOrders = mRows.reduce((s,r)=>s+r.confirmed_orders,0)
     const totUpsell = mRows.reduce((s,r)=>s+Number(r.upsell_amount),0)
+    const totUpsellPotential = mRows.reduce((s,r)=>s+Number(r.upsell_potential||0),0)
     const baseSalary = calcMgrSalary(totOrders, totUpsell, m.rate_per_order, m.upsell_pct)
     const orderPay = totOrders * m.rate_per_order
     const upsellPay = totUpsell * m.upsell_pct
-    return {...m, totOrders, totUpsell, baseSalary, orderPay, upsellPay, bonusPay:0, bonusBase:0}
+    return {...m, totOrders, totUpsell, totUpsellPotential, baseSalary, orderPay, upsellPay, bonusPay:0, bonusBase:0}
   })
 
   const totalBaseFop = mgrStats.reduce((s,m)=>s+m.baseSalary,0)
@@ -1161,7 +1162,8 @@ async function loadManagers() {
       <div class="mgr-month-salary">${uah(m.baseSalary + m.bonusPay)}</div>
       <div class="store-stat"><span class="store-stat-label">Підтв. замовлень</span><span class="store-stat-value">${num(m.totOrders)} шт</span></div>
       <div class="store-stat"><span class="store-stat-label">Ставка (${uah(m.rate_per_order)}/шт)</span><span class="store-stat-value">${uah(m.orderPay)}</span></div>
-      <div class="store-stat"><span class="store-stat-label">Допродажі</span><span class="store-stat-value">${uah(m.totUpsell)}</span></div>
+      <div class="store-stat"><span class="store-stat-label">Допродаж (продано)</span><span class="store-stat-value">${uah(m.totUpsell)}</span></div>
+      <div class="store-stat"><span class="store-stat-label">Допродаж (всього, з тих що в дорозі)</span><span class="store-stat-value" style="color:var(--muted)">${uah(m.totUpsellPotential)}</span></div>
       <div class="store-stat"><span class="store-stat-label">${Math.round(m.upsell_pct*100)}% від допродажів</span><span class="store-stat-value">${uah(m.upsellPay)}</span></div>
       ${m.profit_share_pct > 0 ? `
       <div class="store-stat" style="border-top:1px solid var(--border);margin-top:6px;padding-top:8px"><span class="store-stat-label">Чистий прибуток ${m.profit_share_store}</span><span class="store-stat-value">${uah(m.bonusBase)}</span></div>
@@ -1182,10 +1184,11 @@ async function loadManagers() {
         <td><strong>${r.managers?.name||'—'}</strong></td>
         <td>${mkBadge(r.stores?.name||'—')}</td>
         <td class="td-right">${num(r.confirmed_orders)}</td>
+        <td class="td-right" style="color:var(--muted)">${uah(Number(r.upsell_potential||0))}</td>
         <td class="td-right">
           <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px">
             <span id="upsell-view-${r.id}">${uah(Number(r.upsell_amount))}</span>
-            <button class="btn btn-ghost btn-sm" style="padding:2px 6px" onclick="editUpsell('${r.id}', ${Number(r.upsell_amount)})" title="Редагувати допродаж">✏️</button>
+            <button class="btn btn-ghost btn-sm" style="padding:2px 6px" onclick="editUpsell('${r.id}', ${Number(r.upsell_amount)})" title="Редагувати вручну (зазвичай рахується автоматично)">✏️</button>
           </div>
         </td>
         <td class="td-right" id="sal-${r.id}" style="color:var(--amber);font-weight:600">${uah(sal)}</td>
