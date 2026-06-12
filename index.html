@@ -158,7 +158,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
 <!-- DASHBOARD -->
 <div class="page active" id="page-dashboard">
   <div class="page-header">
-    <div><div class="page-title">Дашборд</div><div class="page-sub">Загальна аналітика по всіх магазинах</div></div>
+    <div><div class="page-title">Дашборд</div><div class="page-sub">Загальна аналітика по всіх магазинах · <span class="usd-rate-display"></span></div></div>
     <div style="display:flex;gap:8px;align-items:center"><button id="sync-btn" class="btn btn-p" onclick="syncQuick()">🔄 Оновити з Sales Drive</button><span id="dash-filter-wrap"></span></div>
   </div>
   <div class="kpi-grid kpi-grid-4" id="dash-kpi1"></div>
@@ -173,7 +173,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
 <!-- DAILY -->
 <div class="page" id="page-daily">
   <div class="page-header">
-    <div><div class="page-title">По днях</div><div class="page-sub">Щоденні звіти</div></div>
+    <div><div class="page-title">По днях</div><div class="page-sub">Щоденні звіти · <span class="usd-rate-display"></span></div></div>
     <div class="filters">
       <select id="daily-store" onchange="loadDaily()"><option value="">Всі магазини</option></select>
       <span id="daily-filter-wrap"></span>
@@ -351,7 +351,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
     <div class="form-section-title">Курс валют</div>
     <div style="display:flex;align-items:center;gap:10px">
       <label style="margin:0">USD/UAH</label>
-      <input type="number" id="usd-rate" value="41" style="width:100px">
+      <input type="number" id="usd-rate" style="width:100px">
       <span style="color:var(--muted)">грн за $1</span>
       <button class="btn btn-ghost btn-sm" onclick="saveRate()">Зберегти</button>
     </div>
@@ -408,7 +408,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
 const SUPABASE_URL = 'https://lvyssuomgbccjmksetof.supabase.co'
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx2eXNzdW9tZ2JjY2pta3NldG9mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExNTc1MjcsImV4cCI6MjA5NjczMzUyN30.AyhiYKQiSuTgl76PRrMwEjMFjxjh2IGOOUMJ9jE7csQ'
 
-let USD_RATE = 41
+let USD_RATE = Number(localStorage.getItem('usd_rate')) || 41
 const { createClient } = supabase
 const db = createClient(SUPABASE_URL, SUPABASE_KEY)
 
@@ -1329,7 +1329,18 @@ async function deleteMgr(id) {
 
 function saveRate() {
   USD_RATE = Number(document.getElementById('usd-rate').value)||41
+  localStorage.setItem('usd_rate', String(USD_RATE))
   toast(`Курс збережено: ${USD_RATE} грн/$`)
+  updateRateDisplays()
+  // Refresh current page to apply new rate
+  const activePage = document.querySelector('.page.active')?.id?.replace('page-','')
+  if (activePage) showPage(activePage)
+}
+
+function updateRateDisplays() {
+  document.querySelectorAll('.usd-rate-display').forEach(el => {
+    el.textContent = `Курс: ${USD_RATE} грн/$`
+  })
 }
 
 // ============================================================
@@ -1587,6 +1598,9 @@ async function saveAdsEntry() {
     btn.textContent = 'Зберегти рекламу'; btn.disabled = false
   }
 }
+
+document.getElementById('usd-rate').value = USD_RATE
+updateRateDisplays()
 
 init()
 </script>
