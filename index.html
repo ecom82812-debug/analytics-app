@@ -641,9 +641,10 @@ async function loadDashboard() {
   const totProfit = totRevenue - totPurchase - totAds*USD_RATE + totExtra - totRefusals*REFUSAL_PENALTY
   const totLeads = metas.reduce((s,m) => s+m.leads_total,0)
   const totConf = metas.reduce((s,m) => s+m.leads_confirmed,0)
+  const totOrdersAll = reports.reduce((s,r) => s+(r.total_orders||0),0)
   const roas = totAds ? totRevenue/(totAds*USD_RATE) : 0
-  const cpl = totLeads ? totAds/totLeads : 0
-  const kc = totLeads ? totConf/totLeads : 0
+  const cpl = totOrdersAll ? totAds/totOrdersAll : 0
+  const kc = totOrdersAll ? totOrders/totOrdersAll : 0
 
   document.getElementById('dash-kpi1').innerHTML = `
     <div class="kpi"><div class="kpi-label">Профіт</div><div class="kpi-value ${totProfit>=0?'green':'red'}">${uah(totProfit)}</div></div>
@@ -654,7 +655,7 @@ async function loadDashboard() {
   document.getElementById('dash-kpi2').innerHTML = `
     <div class="kpi"><div class="kpi-label">ROAS</div><div class="kpi-value ${roas>=3?'green':roas>0?'red':''}">${roas.toFixed(2)}x</div><div class="kpi-hint">ціль ≥ 3.0x</div></div>
     <div class="kpi"><div class="kpi-label">Ціна ліда</div><div class="kpi-value ${cpl>0&&cpl<=4?'green':cpl>4?'red':''}">${usd(cpl)}</div><div class="kpi-hint">ціль ≤ 4$</div></div>
-    <div class="kpi"><div class="kpi-label">КЦ лідів</div><div class="kpi-value">${pct(kc)}</div><div class="kpi-hint">${num(totConf)} з ${num(totLeads)}</div></div>
+    <div class="kpi"><div class="kpi-label">% викупу</div><div class="kpi-value">${pct(kc)}</div><div class="kpi-hint">${num(totOrders)} з ${num(totOrdersAll)}</div></div>
     <div class="kpi"><div class="kpi-label">Закупка</div><div class="kpi-value">${uah(totPurchase)}</div><div class="kpi-hint">маржа: ${uah(totRevenue-totPurchase)}</div></div>
     <div class="kpi"><div class="kpi-label">Оплати на рахунок</div><div class="kpi-value">${uah(totPaymentsDash)}</div></div>
   `
