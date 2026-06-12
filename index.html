@@ -931,6 +931,7 @@ async function loadStores() {
       <div class="store-stat"><span class="store-stat-label">КЦ лідів</span><span class="store-stat-value">${pct(kc)}</span></div>
       <div class="store-stat"><span class="store-stat-label">Реклама</span><span class="store-stat-value">${usd(s.ads)}</span></div>
       <div class="store-stat"><span class="store-stat-label">Відмови (${num(s.refusals||0)} шт)</span><span class="store-stat-value" style="color:var(--red)">-${uah((s.refusals||0)*REFUSAL_PENALTY)}</span></div>
+      <div class="store-stat"><span class="store-stat-label">% викупу</span><span class="store-stat-value" style="color:${(s.orders+(s.refusals||0))>0 && s.orders/(s.orders+(s.refusals||0))>=0.65?'var(--green)':'var(--amber)'}">${(s.orders+(s.refusals||0))>0?pct(s.orders/(s.orders+(s.refusals||0))):'—'}</span></div>
     </div>`
   }).join('')
 }
