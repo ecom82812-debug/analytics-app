@@ -819,21 +819,21 @@ async function loadMonthly() {
   }
   for (const m of (meta||[])) {
     const month = m.report_date.slice(0,7)
-    for (const key of Object.keys(grouped)) {
-      if (key.startsWith(month+'|')) {
-        grouped[key].leads += m.leads_total
-        grouped[key].conf_leads += m.leads_confirmed
-      }
+    const store = storeName(m.store_id)
+    const key = `${month}|${store}`
+    if (grouped[key]) {
+      grouped[key].leads += m.leads_total
+      grouped[key].conf_leads += m.leads_confirmed
     }
   }
   for (const m of (mgrData||[])) {
     const month = m.report_date.slice(0,7)
+    const store = storeName(m.store_id)
+    const key = `${month}|${store}`
     const rate = m.managers?.rate_per_order||16
     const upsell_pct = m.managers?.upsell_pct||0.25
     const sal = m.confirmed_orders*rate + Number(m.upsell_amount)*upsell_pct
-    for (const key of Object.keys(grouped)) {
-      if (key.startsWith(month+'|')) grouped[key].mgr_salary += sal
-    }
+    if (grouped[key]) grouped[key].mgr_salary += sal
   }
 
   const months = [...new Set(Object.values(grouped).map(r=>r.month))].sort().reverse()
