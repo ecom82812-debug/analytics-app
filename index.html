@@ -192,7 +192,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
   <div class="card">
     <div class="table-wrap"><table>
       <thead><tr>
-        <th>Дата</th><th>Магазин</th><th>Замовл.</th><th>Відмови</th><th>Виручка</th><th>Оплати</th><th>Закупка</th><th>Реклама $</th><th>Профіт</th><th>CPO план $</th><th>CPO факт $</th><th>Всього замовл.</th><th>КЦ</th><th>Дії</th>
+        <th>Дата</th><th>Магазин</th><th>Замовл.</th><th>Відмови</th><th>Виручка</th><th>Оплати</th><th>Закупка</th><th>Реклама $</th><th>Штраф</th><th>З/П</th><th>Чистий прибуток</th><th>CPO план $</th><th>CPO факт $</th><th>Всього замовл.</th><th>КЦ</th><th>Дії</th>
       </tr></thead>
       <tbody id="daily-tbody"><tr><td colspan="10" class="loading">Завантаження...</td></tr></tbody>
     </table></div>
@@ -776,34 +776,50 @@ async function loadDaily() {
   let q = db.from('daily_reports').select('*, stores(name)').gte('report_date',from).lte('report_date',to).order('report_date',{ascending:false})
   if (storeFilter) q = q.eq('store_id', storeFilter)
 
-  const [{data:rep},{data:meta}] = await Promise.all([
+  const [{data:rep},{data:meta},{data:mgrDaily}] = await Promise.all([
     q,
-    db.from('meta_ads').select('*').gte('report_date',from).lte('report_date',to)
+    db.from('meta_ads').select('*').gte('report_date',from).lte('report_date',to),
+    db.from('manager_daily').select('*, managers(rate_per_order,upsell_pct)').gte('report_date',from).lte('report_date',to)
   ])
   const reports = rep||[], metas = meta||[]
 
+  // Calc manager salary per store+date
+  const mgrSalaryByKey = {}
+  for (const m of (mgrDaily||[])) {
+    const key = `${m.report_date}|${m.store_id}`
+    const rate = m.managers?.rate_per_order||16
+    const up = m.managers?.upsell_pct||0.25
+    const sal = m.confirmed_orders*rate + Number(m.upsell_amount)*up
+    mgrSalaryByKey[key] = (mgrSalaryByKey[key]||0) + sal
+  }
+  const getMgrSalary = (r) => mgrSalaryByKey[`${r.report_date}|${r.store_id}`] || 0
+
   const totRevenue = reports.reduce((s,r)=>s+Number(r.revenue),0)
-  const totProfit = reports.reduce((s,r)=>s+Number(r.revenue)-Number(r.purchase_cost)-Number(r.ads_budget_usd)*USD_RATE+Number(r.extra_income)-(r.refusals||0)*REFUSAL_PENALTY,0)
+  const totMgrSalaryDaily = reports.reduce((s,r)=>s+getMgrSalary(r),0)
+  const totProfit = reports.reduce((s,r)=>s+Number(r.revenue)-Number(r.purchase_cost)-Number(r.ads_budget_usd)*USD_RATE+Number(r.extra_income)-(r.refusals||0)*REFUSAL_PENALTY-getMgrSalary(r),0)
   const totOrders = reports.reduce((s,r)=>s+r.confirmed_orders,0)
   const totPayments = reports.reduce((s,r)=>s+Number(r.card_payments),0)
   const totRefusalsKpi = reports.reduce((s,r)=>s+(r.refusals||0),0)
   const totPenalty = totRefusalsKpi * REFUSAL_PENALTY
 
   document.getElementById('daily-kpi').innerHTML = `
-    <div class="kpi"><div class="kpi-label">Профіт за період</div><div class="kpi-value ${totProfit>=0?'green':'red'}">${uah(totProfit)}</div></div>
+    <div class="kpi"><div class="kpi-label">Чистий прибуток за період</div><div class="kpi-value ${totProfit>=0?'green':'red'}">${uah(totProfit)}</div></div>
     <div class="kpi"><div class="kpi-label">Виручка за період</div><div class="kpi-value">${uah(totRevenue)}</div></div>
     <div class="kpi"><div class="kpi-label">Оплати на рахунок</div><div class="kpi-value">${uah(totPayments)}</div></div>
     <div class="kpi"><div class="kpi-label">Замовлень за період</div><div class="kpi-value">${num(totOrders)}</div></div>
     <div class="kpi"><div class="kpi-label">Штраф за відмови (${num(totRefusalsKpi)} шт)</div><div class="kpi-value red">-${uah(totPenalty)}</div></div>
+    <div class="kpi"><div class="kpi-label">З/П менеджерів за період</div><div class="kpi-value red">-${uah(totMgrSalaryDaily)}</div></div>
   `
 
   if (!reports.length) {
-    document.getElementById('daily-tbody').innerHTML = '<tr><td colspan="14" class="empty"><div class="empty-icon">📭</div>Немає даних — <a href="#" onclick="showPage(\'entry\')" style="color:var(--brand2)">внести перший день →</a></td></tr>'
+    document.getElementById('daily-tbody').innerHTML = '<tr><td colspan="16" class="empty"><div class="empty-icon">📭</div>Немає даних — <a href="#" onclick="showPage(\'entry\')" style="color:var(--brand2)">внести перший день →</a></td></tr>'
     return
   }
 
   document.getElementById('daily-tbody').innerHTML = reports.map(r => {
-    const profit = Number(r.revenue)-Number(r.purchase_cost)-Number(r.ads_budget_usd)*USD_RATE+Number(r.extra_income)-(r.refusals||0)*REFUSAL_PENALTY
+    const mgrSal = getMgrSalary(r)
+    const penaltyR = (r.refusals||0)*REFUSAL_PENALTY
+    const profit = Number(r.revenue)-Number(r.purchase_cost)-Number(r.ads_budget_usd)*USD_RATE+Number(r.extra_income)-penaltyR-mgrSal
     const totalOrders = r.total_orders || 0
     const kc = totalOrders > 0 ? r.confirmed_orders/totalOrders : null
     // CPO в доларах: реклама($) / підтверджені замовлення
@@ -824,6 +840,8 @@ async function loadDaily() {
       </td>
       <td class="td-right">${uah(Number(r.purchase_cost))}</td>
       <td class="td-right">${usd(Number(r.ads_budget_usd))}</td>
+      <td class="td-right" style="color:var(--red)">${penaltyR>0?'-'+uah(penaltyR):'—'}</td>
+      <td class="td-right" style="color:var(--red)">${mgrSal>0?'-'+uah(mgrSal):'—'}</td>
       <td class="td-right">${profitBadge(profit)}</td>
       <td class="td-right">${cpoFixedUsd!==null?usd(cpoFixedUsd):'—'}</td>
       <td class="td-right">${r.ads_budget_usd>0?usd(cpoFact):'—'}</td>
@@ -1049,7 +1067,7 @@ async function loadMeta() {
     <div class="kpi"><div class="kpi-label">Ціна ліда</div><div class="kpi-value ${cpl>0&&cpl<=4?'green':cpl>4?'red':''}">${usd(cpl)}</div><div class="kpi-hint">ціль ≤ 4$</div></div>
   `
 
-  if (!rows.length) { document.getElementById('meta-tbody').innerHTML = '<tr><td colspan="14" class="empty"><div class="empty-icon">📭</div>Немає даних</td></tr>'; return }
+  if (!rows.length) { document.getElementById('meta-tbody').innerHTML = '<tr><td colspan="16" class="empty"><div class="empty-icon">📭</div>Немає даних</td></tr>'; return }
 
   document.getElementById('meta-tbody').innerHTML = rows.map(r => {
     const ctr = r.impressions ? r.clicks/r.impressions : 0
