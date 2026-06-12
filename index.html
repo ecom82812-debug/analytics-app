@@ -184,7 +184,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand2);box-shadow:0 
   <div class="card">
     <div class="table-wrap"><table>
       <thead><tr>
-        <th>Дата</th><th>Магазин</th><th>Замовл.</th><th>Виручка</th><th>Оплати</th><th>Закупка</th><th>Реклама $</th><th>Профіт</th><th>CPO план $</th><th>CPO факт $</th><th>Всього замовл.</th><th>КЦ</th><th>Дії</th>
+        <th>Дата</th><th>Магазин</th><th>Замовл.</th><th>Відмови</th><th>Виручка</th><th>Оплати</th><th>Закупка</th><th>Реклама $</th><th>Профіт</th><th>CPO план $</th><th>CPO факт $</th><th>Всього замовл.</th><th>КЦ</th><th>Дії</th>
       </tr></thead>
       <tbody id="daily-tbody"><tr><td colspan="10" class="loading">Завантаження...</td></tr></tbody>
     </table></div>
@@ -715,7 +715,7 @@ async function loadDaily() {
   `
 
   if (!reports.length) {
-    document.getElementById('daily-tbody').innerHTML = '<tr><td colspan="13" class="empty"><div class="empty-icon">📭</div>Немає даних — <a href="#" onclick="showPage(\'entry\')" style="color:var(--brand2)">внести перший день →</a></td></tr>'
+    document.getElementById('daily-tbody').innerHTML = '<tr><td colspan="14" class="empty"><div class="empty-icon">📭</div>Немає даних — <a href="#" onclick="showPage(\'entry\')" style="color:var(--brand2)">внести перший день →</a></td></tr>'
     return
   }
 
@@ -731,6 +731,7 @@ async function loadDaily() {
       <td>${fdate(r.report_date)}</td>
       <td>${mkBadge(r.stores?.name || storeName(r.store_id))}</td>
       <td class="td-right">${num(r.confirmed_orders)}</td>
+      <td class="td-right">${r.refusals>0?`<span style="color:var(--red)">${num(r.refusals)}</span>`:'0'}</td>
       <td class="td-right">${uah(Number(r.revenue))}</td>
       <td class="td-right">
         <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px">
@@ -944,7 +945,7 @@ async function loadMeta() {
     <div class="kpi"><div class="kpi-label">Ціна ліда</div><div class="kpi-value ${cpl>0&&cpl<=4?'green':cpl>4?'red':''}">${usd(cpl)}</div><div class="kpi-hint">ціль ≤ 4$</div></div>
   `
 
-  if (!rows.length) { document.getElementById('meta-tbody').innerHTML = '<tr><td colspan="13" class="empty"><div class="empty-icon">📭</div>Немає даних</td></tr>'; return }
+  if (!rows.length) { document.getElementById('meta-tbody').innerHTML = '<tr><td colspan="14" class="empty"><div class="empty-icon">📭</div>Немає даних</td></tr>'; return }
 
   document.getElementById('meta-tbody').innerHTML = rows.map(r => {
     const ctr = r.impressions ? r.clicks/r.impressions : 0
